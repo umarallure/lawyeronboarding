@@ -55,21 +55,20 @@ const Auth = () => {
       <div className="absolute inset-0 bg-[linear-gradient(to_right,hsl(var(--border))_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--border))_1px,transparent_1px)] bg-[size:24px_24px] opacity-10" />
 
       {/* --- Main Container --- */}
-      <div className="relative z-10 w-full max-w-6xl px-4 animate-in fade-in slide-in-from-bottom-8 duration-700">
+      <div className="relative z-10 w-full max-w-6xl px-4 pt-10 animate-in fade-in slide-in-from-bottom-8 duration-700">
+        <div className="w-full flex justify-between items-center">
+          <img src="/assets/logo.png" alt="Crash Guard" className="h-16 w-auto drop-shadow-md" />
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 lg:gap-8 items-center">
           
           {/* --- Left Column: Brand & Value --- */}
           <div className="hidden lg:flex flex-col justify-center h-full space-y-8 pr-10">
             <div className="space-y-4">
-              {/* Uses bg-primary/10 and text-primary */}
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-medium backdrop-blur-sm w-fit">
-                <ShieldCheck className="w-3 h-3" />
-                <span>Enterprise Grade Security</span>
-              </div>
               <h1 className="text-5xl font-bold tracking-tight text-foreground leading-[1.1]">
                 Manage leads with <br />
-                {/* Uses gradient from primary to sky */}
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-sky-400">
+                {/* Gradient adjusted to primary → black */}
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-black">
                   precision & speed.
                 </span>
               </h1>
