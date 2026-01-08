@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useLicensedAgent } from '@/hooks/useLicensedAgent';
-import { NavigationHeader } from '@/components/NavigationHeader';
 import { useToast } from '@/hooks/use-toast';
 
 // Import sidebar component
@@ -79,17 +78,13 @@ const AdminAnalyticsLayout = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <NavigationHeader title="Admin Analytics" />
+    <div className="flex">
+      {/* Sidebar - uses URL-based navigation */}
+      <AnalyticsSidebar activeTab={getActiveTab()} onTabChange={handleTabChange} />
 
-      <div className="flex">
-        {/* Sidebar - uses URL-based navigation */}
-        <AnalyticsSidebar activeTab={getActiveTab()} onTabChange={handleTabChange} />
-
-        {/* Main Content - renders child route */}
-        <div className="flex-1 p-6 space-y-6">
-          <Outlet />
-        </div>
+      {/* Main Content - renders child route */}
+      <div className="flex-1 p-6 space-y-6">
+        <Outlet />
       </div>
     </div>
   );

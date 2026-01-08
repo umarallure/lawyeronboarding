@@ -36,6 +36,7 @@ import AdminAnalytics from "./pages/AdminAnalytics";
 import { AgentsPage, VendorsPage, DailyPage, CarriersPage } from "./pages/AdminAnalytics/pages";
 import NotFound from "./pages/NotFound";
 import UserManagement from "./pages/UserManagement";
+import AppShell from "@/components/layout/AppShell";
 
 const queryClient = new QueryClient();
 
@@ -54,7 +55,9 @@ const App = () => (
               path="/dashboard" 
               element={
                 <ProtectedRoute>
-                  <Dashboard />
+                  <AppShell title="Dashboard">
+                    <Dashboard />
+                  </AppShell>
                 </ProtectedRoute>
               } 
             />
@@ -62,7 +65,9 @@ const App = () => (
               path="/center-lead-portal" 
               element={
                 <CenterProtectedRoute>
-                  <CenterLeadPortal />
+                  <AppShell title="My Leads">
+                    <CenterLeadPortal />
+                  </AppShell>
                 </CenterProtectedRoute>
               } 
             />
@@ -70,7 +75,9 @@ const App = () => (
               path="/center-calendar-view" 
               element={
                 <CenterProtectedRoute>
-                  <CenterCalendarView />
+                  <AppShell title="Calendar View">
+                    <CenterCalendarView />
+                  </AppShell>
                 </CenterProtectedRoute>
               } 
             />
@@ -78,7 +85,9 @@ const App = () => (
               path="/center-callback-request" 
               element={
                 <CenterProtectedRoute>
-                  <CallbackRequestPage />
+                  <AppShell title="Callback Request">
+                    <CallbackRequestPage />
+                  </AppShell>
                 </CenterProtectedRoute>
               } 
             />
@@ -86,7 +95,9 @@ const App = () => (
               path="/commission-portal" 
               element={
                 <LicensedAgentProtectedRoute>
-                  <CommissionPortal />
+                  <AppShell title="Retainers">
+                    <CommissionPortal />
+                  </AppShell>
                 </LicensedAgentProtectedRoute>
               } 
             />
@@ -94,7 +105,9 @@ const App = () => (
               path="/call-result-update" 
               element={
                 <ProtectedRoute>
-                  <CallResultUpdate />
+                  <AppShell title="Call Result Update">
+                    <CallResultUpdate />
+                  </AppShell>
                 </ProtectedRoute>
               } 
             />
@@ -102,7 +115,9 @@ const App = () => (
               path="/new-callback" 
               element={
                 <ProtectedRoute>
-                  <NewCallback />
+                  <AppShell title="New Callback">
+                    <NewCallback />
+                  </AppShell>
                 </ProtectedRoute>
               } 
             />
@@ -110,7 +125,9 @@ const App = () => (
               path="/call-result-journey" 
               element={
                 <ProtectedRoute>
-                  <CallResultJourney />
+                  <AppShell title="Call Result Journey">
+                    <CallResultJourney />
+                  </AppShell>
                 </ProtectedRoute>
               } 
             />
@@ -118,7 +135,9 @@ const App = () => (
               path="/analytics" 
               element={
                 <ProtectedRoute>
-                  <AgentActivityDashboard />
+                  <AppShell title="Analytics">
+                    <AgentActivityDashboard />
+                  </AppShell>
                 </ProtectedRoute>
               } 
             />
@@ -126,7 +145,9 @@ const App = () => (
               path="/daily-deal-flow" 
               element={
                 <ProtectedRoute>
-                  <DailyDealFlowPage />
+                  <AppShell title="Daily Deal Flow">
+                    <DailyDealFlowPage />
+                  </AppShell>
                 </ProtectedRoute>
               } 
             />
@@ -134,7 +155,9 @@ const App = () => (
               path="/transfer-portal" 
               element={
                 <ProtectedRoute>
-                  <TransferPortalPage />
+                  <AppShell title="Transfer Portal">
+                    <TransferPortalPage />
+                  </AppShell>
                 </ProtectedRoute>
               } 
             />
@@ -142,7 +165,9 @@ const App = () => (
               path="/submission-portal" 
               element={
                 <ProtectedRoute>
-                  <SubmissionPortalPage />
+                  <AppShell title="Submission Portal">
+                    <SubmissionPortalPage />
+                  </AppShell>
                 </ProtectedRoute>
               } 
             />
@@ -150,7 +175,9 @@ const App = () => (
               path="/reports" 
               element={
                 <ProtectedRoute>
-                  <ReportsPage />
+                  <AppShell title="Reports">
+                    <ReportsPage />
+                  </AppShell>
                 </ProtectedRoute>
               } 
             />
@@ -158,7 +185,9 @@ const App = () => (
               path="/bulk-lookup" 
               element={
                 <ProtectedRoute>
-                  <BulkLookupPage />
+                  <AppShell title="Bulk Lookup">
+                    <BulkLookupPage />
+                  </AppShell>
                 </ProtectedRoute>
               } 
             />
@@ -166,7 +195,9 @@ const App = () => (
               path="/deal-flow-lookup" 
               element={
                 <ProtectedRoute>
-                  <DealFlowLookup />
+                  <AppShell title="Deal Flow Lookup">
+                    <DealFlowLookup />
+                  </AppShell>
                 </ProtectedRoute>
               } 
             />
@@ -174,7 +205,9 @@ const App = () => (
               path="/ghl-sync" 
               element={
                 <ProtectedRoute>
-                  <GHLSyncPage />
+                  <AppShell title="GHL Sync">
+                    <GHLSyncPage />
+                  </AppShell>
                 </ProtectedRoute>
               } 
             />
@@ -182,7 +215,9 @@ const App = () => (
               path="/agent-licensing" 
               element={
                 <ProtectedRoute>
-                  <AgentLicensing />
+                  <AppShell title="Find Eligible Agents">
+                    <AgentLicensing />
+                  </AppShell>
                 </ProtectedRoute>
               } 
             />
@@ -190,7 +225,9 @@ const App = () => (
               path="/agent-eligibility" 
               element={
                 <ProtectedRoute>
-                  <AgentEligibilityPage />
+                  <AppShell title="Agent Eligibility">
+                    <AgentEligibilityPage />
+                  </AppShell>
                 </ProtectedRoute>
               } 
             />
@@ -198,7 +235,9 @@ const App = () => (
               path="/buffer-performance-report" 
               element={
                 <ProtectedRoute>
-                  <BufferPerformanceReport />
+                  <AppShell title="Buffer Performance">
+                    <BufferPerformanceReport />
+                  </AppShell>
                 </ProtectedRoute>
               } 
             />
@@ -206,7 +245,9 @@ const App = () => (
               path="/licensed-agent-performance-report" 
               element={
                 <ProtectedRoute>
-                  <LicensedAgentPerformanceReport />
+                  <AppShell title="Licensed Agent Performance">
+                    <LicensedAgentPerformanceReport />
+                  </AppShell>
                 </ProtectedRoute>
               } 
             />
@@ -214,7 +255,9 @@ const App = () => (
               path="/licensed-agent-inbox" 
               element={
                 <ProtectedRoute>
-                  <LicensedAgentInbox />
+                  <AppShell title="Inbox">
+                    <LicensedAgentInbox />
+                  </AppShell>
                 </ProtectedRoute>
               } 
             />
@@ -222,7 +265,9 @@ const App = () => (
               path="/task/:taskId" 
               element={
                 <ProtectedRoute>
-                  <TaskDetailView />
+                  <AppShell title="Task Details">
+                    <TaskDetailView />
+                  </AppShell>
                 </ProtectedRoute>
               } 
             />
@@ -230,7 +275,9 @@ const App = () => (
               path="/retention-tasks" 
               element={
                 <ProtectedRoute>
-                  <RetentionTasksView />
+                  <AppShell title="Retainers">
+                    <RetentionTasksView />
+                  </AppShell>
                 </ProtectedRoute>
               } 
             />
@@ -238,7 +285,9 @@ const App = () => (
               path="/user-management" 
               element={
                 <ProtectedRoute>
-                  <UserManagement />
+                  <AppShell title="Users">
+                    <UserManagement />
+                  </AppShell>
                 </ProtectedRoute>
               } 
             />
@@ -246,7 +295,9 @@ const App = () => (
               path="/admin-analytics" 
               element={
                 <ProtectedRoute>
-                  <AdminAnalytics />
+                  <AppShell title="Admin Analytics">
+                    <AdminAnalytics />
+                  </AppShell>
                 </ProtectedRoute>
               }
             >

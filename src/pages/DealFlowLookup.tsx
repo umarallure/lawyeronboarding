@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { NavigationHeader } from '@/components/NavigationHeader';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -363,7 +362,6 @@ export default function DealFlowLookup() {
 
   return (
     <div className="min-h-screen bg-background">
-      <NavigationHeader title="Deal Flow & Policy Lookup" />
       <main className="container mx-auto py-12 px-4">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-8">

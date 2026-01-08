@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { NavigationHeader } from "@/components/NavigationHeader";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useAttorneys } from "@/hooks/useAttorneys";
 import { supabase } from "@/integrations/supabase/client";
 import { canPerformWriteOperations } from "@/lib/userPermissions";
 import { DataGrid } from "./components/DataGrid";
@@ -15,6 +15,7 @@ import { GHLExport } from "@/components/GHLExport";
 import { Loader2, RefreshCw, Download, FileSpreadsheet, ChevronDown, FileText, Calendar, BarChart3, UserCheck } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { dateObjectToESTString } from "@/lib/dateUtils";
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 
 export interface DailyDealFlowRow {
@@ -27,6 +28,8 @@ export interface DailyDealFlowRow {
   buffer_agent?: string;
   agent?: string;
   licensed_agent_account?: string;
+  assigned_attorney_id?: string | null;
+  is_retention_call?: boolean;
   status?: string;
   call_result?: string;
   carrier?: string;
@@ -60,6 +63,7 @@ const DailyDealFlowPage = () => {
   const [dateToFilter, setDateToFilter] = useState<Date | undefined>(undefined);
   const [bufferAgentFilter, setBufferAgentFilter] = useState(ALL_OPTION);
   const [licensedAgentFilter, setLicensedAgentFilter] = useState(ALL_OPTION);
+  const [assignedAttorneyFilter, setAssignedAttorneyFilter] = useState(ALL_OPTION);
   const [leadVendorFilter, setLeadVendorFilter] = useState(ALL_OPTION);
   const [statusFilter, setStatusFilter] = useState(ALL_OPTION);
   const [callResultFilter, setCallResultFilter] = useState(ALL_OPTION);
@@ -71,6 +75,18 @@ const DailyDealFlowPage = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   const navigate = useNavigate();
+
+  const { attorneys, loading: attorneysLoading } = useAttorneys();
+  const attorneyById = useMemo(() => {
+    const map: Record<string, { full_name: string | null; primary_email: string | null }> = {};
+    for (const attorney of attorneys) {
+      map[attorney.user_id] = {
+        full_name: attorney.full_name,
+        primary_email: attorney.primary_email
+      };
+    }
+    return map;
+  }, [attorneys]);
 
   // Check if user has write permissions
   const hasWritePermissions = canPerformWriteOperations(user?.id);
@@ -139,6 +155,10 @@ const DailyDealFlowPage = () => {
 
       if (licensedAgentFilter && licensedAgentFilter !== ALL_OPTION) {
         query = query.eq('licensed_agent_account', licensedAgentFilter);
+      }
+
+      if (assignedAttorneyFilter && assignedAttorneyFilter !== ALL_OPTION) {
+        query = (query as any).eq('assigned_attorney_id', assignedAttorneyFilter);
       }
 
       if (leadVendorFilter && leadVendorFilter !== ALL_OPTION) {
@@ -213,7 +233,7 @@ const DailyDealFlowPage = () => {
   useEffect(() => {
     setCurrentPage(1); // Reset to first page when filters change
     fetchData(1);
-  }, [dateFilter, dateFromFilter, dateToFilter, bufferAgentFilter, licensedAgentFilter, leadVendorFilter, statusFilter, callResultFilter, retentionFilter, incompleteUpdatesFilter]);
+  }, [dateFilter, dateFromFilter, dateToFilter, bufferAgentFilter, licensedAgentFilter, assignedAttorneyFilter, leadVendorFilter, statusFilter, callResultFilter, retentionFilter, incompleteUpdatesFilter]);
 
   // Refetch when search term changes (debounced)
   useEffect(() => {
@@ -412,7 +432,7 @@ const DailyDealFlowPage = () => {
     }
   };
 
-  if (loading) {
+  if (loading || attorneysLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex items-center gap-2">
@@ -425,7 +445,6 @@ const DailyDealFlowPage = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <NavigationHeader title="Daily Deal Flow Sheet" />
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-full mx-auto space-y-6">
           {/* Header */}
@@ -528,6 +547,9 @@ const DailyDealFlowPage = () => {
           onBufferAgentFilterChange={setBufferAgentFilter}
           licensedAgentFilter={licensedAgentFilter}
           onLicensedAgentFilterChange={setLicensedAgentFilter}
+          assignedAttorneyFilter={assignedAttorneyFilter}
+          onAssignedAttorneyFilterChange={setAssignedAttorneyFilter}
+          attorneys={attorneys}
           leadVendorFilter={leadVendorFilter}
           onLeadVendorFilterChange={setLeadVendorFilter}
           statusFilter={statusFilter}
@@ -556,6 +578,8 @@ const DailyDealFlowPage = () => {
               data={filteredData}
               onDataUpdate={fetchData}
               hasWritePermissions={hasWritePermissions}
+              attorneys={attorneys}
+              attorneyById={attorneyById}
               currentPage={currentPage}
               totalRecords={totalRecords}
               recordsPerPage={recordsPerPage}

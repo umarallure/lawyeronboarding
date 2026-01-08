@@ -18,11 +18,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { logCallUpdate, getLeadInfo } from "@/lib/callLogging";
 import { AppFixTaskTypeSelector } from "@/components/AppFixTaskTypeSelector";
 import { useCenters } from "@/hooks/useCenters";
+import { useAttorneys } from "@/hooks/useAttorneys";
 
 interface CallResultFormProps {
   submissionId: string;
   customerName?: string;
   onSuccess?: () => void;
+  initialAssignedAttorneyId?: string;
 }
 
 const statusOptions = [
@@ -417,7 +419,7 @@ const combineNotes = (structuredNotes: string, additionalNotes: string) => {
   return structuredNotes + '\n\n' + additionalNotes;
 };
 
-export const CallResultForm = ({ submissionId, customerName, onSuccess }: CallResultFormProps) => {
+export const CallResultForm = ({ submissionId, customerName, onSuccess, initialAssignedAttorneyId }: CallResultFormProps) => {
   const [applicationSubmitted, setApplicationSubmitted] = useState<boolean | null>(null);
   const [status, setStatus] = useState("");
   const [statusReason, setStatusReason] = useState("");
@@ -448,9 +450,17 @@ export const CallResultForm = ({ submissionId, customerName, onSuccess }: CallRe
   const [thirdPartyVehicleRegistration, setThirdPartyVehicleRegistration] = useState("");
   const [otherPartyAdmitFault, setOtherPartyAdmitFault] = useState<boolean | null>(null);
   const [passengersCount, setPassengersCount] = useState("");
+  const [assignedAttorneyId, setAssignedAttorneyId] = useState<string>("");
   
   const { toast } = useToast();
   const { leadVendors, loading: centersLoading } = useCenters();
+  const { attorneys, loading: attorneysLoading } = useAttorneys();
+
+  useEffect(() => {
+    if (initialAssignedAttorneyId && !assignedAttorneyId) {
+      setAssignedAttorneyId(initialAssignedAttorneyId);
+    }
+  }, [initialAssignedAttorneyId, assignedAttorneyId]);
 
   // Load existing call result data
   useEffect(() => {
@@ -1017,6 +1027,7 @@ export const CallResultForm = ({ submissionId, customerName, onSuccess }: CallRe
                 is_callback: submissionId.startsWith('CB') || submissionId.startsWith('CBB'),
                 is_retention_call: isRetentionCall,
                 application_submitted: applicationSubmitted,
+                assigned_attorney_id: assignedAttorneyId || null,
                 carrier_attempted_1: status === "GI - Currently DQ" ? carrierAttempted1 : null,
                 carrier_attempted_2: status === "GI - Currently DQ" ? carrierAttempted2 : null,
                 carrier_attempted_3: status === "GI - Currently DQ" ? carrierAttempted3 : null,
@@ -1353,6 +1364,25 @@ export const CallResultForm = ({ submissionId, customerName, onSuccess }: CallRe
                 <p className="text-sm text-red-500 mt-1">Call source is required</p>
               )}
             </div>
+
+          {/* Assign Attorney - shown for both Yes/No */}
+          <div>
+            <Label htmlFor="assignedAttorney" className="text-base font-semibold">
+              Assign Attorney
+            </Label>
+            <Select value={assignedAttorneyId || undefined} onValueChange={setAssignedAttorneyId}>
+              <SelectTrigger>
+                <SelectValue placeholder={attorneysLoading ? "Loading attorneys..." : "Select attorney"} />
+              </SelectTrigger>
+              <SelectContent>
+                {attorneys.map((a) => (
+                  <SelectItem key={a.user_id} value={a.user_id}>
+                    {a.full_name || a.primary_email || a.user_id}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           
           {/* Fields for submitted applications */}
           {showSubmittedFields && (

@@ -7,11 +7,14 @@ import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Ch
 import { DailyDealFlowRow } from "../DailyDealFlowPage";
 import { EditableRow } from "./EditableRow";
 import { supabase } from "@/integrations/supabase/client";
+import type { AttorneyProfile } from "@/hooks/useAttorneys";
 
 interface DataGridProps {
   data: DailyDealFlowRow[];
   onDataUpdate: () => void;
   hasWritePermissions?: boolean;
+  attorneys: AttorneyProfile[];
+  attorneyById: Record<string, { full_name: string | null; primary_email: string | null }>;
   currentPage?: number;
   totalRecords?: number;
   recordsPerPage?: number;
@@ -22,6 +25,8 @@ export const DataGrid = ({
   data, 
   onDataUpdate, 
   hasWritePermissions = true,
+  attorneys,
+  attorneyById,
   currentPage = 1,
   totalRecords = 0,
   recordsPerPage = 50,
@@ -32,6 +37,8 @@ export const DataGrid = ({
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
   const [allDistinctValues, setAllDistinctValues] = useState<{[key: string]: string[]}>({});
+
+
 
   // Fetch all distinct values for grouping fields when component mounts
   useEffect(() => {
@@ -84,7 +91,7 @@ export const DataGrid = ({
   ];
 
   const columns = [
-    "S.No", "Date", "Lead Vendor", "Insured Name", "Phone Number", "Buffer Agent", "Agent", "Licensed Account", "Status",
+    "S.No", "Date", "Lead Vendor", "Insured Name", "Phone Number", "Buffer Agent", "Agent", "Assigned Attorney", "Status",
     "Call Result", "Notes"
   ];
   
@@ -368,7 +375,7 @@ export const DataGrid = ({
                   case 'Phone Number': return 'client_phone_number';
                   case 'Buffer Agent': return 'buffer_agent';
                   case 'Agent': return 'agent';
-                  case 'Licensed Account': return 'licensed_agent_account';
+                  case 'Assigned Attorney': return 'assigned_attorney_id';
                   case 'Status': return 'status';
                   case 'Call Result': return 'call_result';
                   case 'Carrier': return 'carrier';
@@ -393,7 +400,7 @@ export const DataGrid = ({
                   column === 'Phone Number' ? 'w-28' :
                   column === 'Buffer Agent' ? 'w-24' :
                   column === 'Agent' ? 'w-20' :
-                  column === 'Licensed Account' ? 'w-24' :
+                  column === 'Assigned Attorney' ? 'w-28' :
                   column === 'Status' ? 'w-32' :
                   column === 'Call Result' ? 'w-24' :
                   column === 'Carrier' ? 'w-16' :
@@ -447,6 +454,8 @@ export const DataGrid = ({
                 onUpdate={onDataUpdate}
                 hasWritePermissions={hasWritePermissions}
                 isDuplicate={isRowDuplicate(row)}
+                attorneyById={attorneyById}
+                attorneys={attorneys}
               />
             ))
           ) : (
@@ -494,6 +503,8 @@ export const DataGrid = ({
                           onUpdate={onDataUpdate}
                           hasWritePermissions={hasWritePermissions}
                           isDuplicate={isRowDuplicate(row)}
+                          attorneyById={attorneyById}
+                          attorneys={attorneys}
                         />
                       );
                     })
@@ -545,6 +556,8 @@ export const DataGrid = ({
                               onUpdate={onDataUpdate}
                               hasWritePermissions={hasWritePermissions}
                               isDuplicate={isRowDuplicate(row)}
+                              attorneyById={attorneyById}
+                              attorneys={attorneys}
                             />
                           );
                         })}

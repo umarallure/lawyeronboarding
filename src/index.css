@@ -4,8 +4,8 @@
 
 @layer base {
   :root {
-    /* 60% Base - White/Light Grey (#DADADA) */
-    --background: 0 0% 85%; 
+    /* Light mode base */
+    --background: 0 0% 98%;
     --foreground: 0 0% 13%;
 
     --card: 0 0% 100%;
@@ -18,12 +18,11 @@
     --primary: 18 83% 37%; 
     --primary-foreground: 0 0% 95%;
 
-    /* 30% Secondary - Black (#202020) */
-    --secondary: 0 0% 13%;
-    --secondary-foreground: 0 0% 85%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 13%;
 
-    --muted: 0 0% 75%;
-    --muted-foreground: 0 0% 30%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 40%;
 
     --accent: 18 83% 37%;
     --accent-foreground: 0 0% 95%;
@@ -31,10 +30,20 @@
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 0 0% 70%;
-    --input: 0 0% 70%;
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
     --ring: 18 83% 37%;
     --radius: 0.5rem;
+
+    /* Sidebar tokens (used by AppShell) */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 0 0% 13%;
+    --sidebar-primary: 18 83% 37%;
+    --sidebar-primary-foreground: 0 0% 95%;
+    --sidebar-accent: 0 0% 96%;
+    --sidebar-accent-foreground: 0 0% 13%;
+    --sidebar-border: 0 0% 90%;
+    --sidebar-ring: 18 83% 37%;
   }
 
   .dark {

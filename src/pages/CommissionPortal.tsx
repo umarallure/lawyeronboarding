@@ -8,7 +8,6 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calendar, Filter, Phone, User, DollarSign, TrendingUp, AlertCircle, CheckCircle2, Clock, BarChart3, FileText, Building2, Activity, ShieldCheck, Shield, Award } from 'lucide-react';
-import { NavigationHeader } from '@/components/NavigationHeader';
 import { useAuth } from '@/hooks/useAuth';
 import { useLicensedAgent } from '@/hooks/useLicensedAgent';
 import { supabase } from '@/integrations/supabase/client';
@@ -395,9 +394,6 @@ const CommissionPortal = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <NavigationHeader title="Commission Portal" />
-
       <div className="container mx-auto px-4 py-8">
         {/* Display Name Badge */}
         <div className="mb-6 flex items-center justify-between">

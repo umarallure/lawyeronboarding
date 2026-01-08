@@ -82,14 +82,9 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   }, [user, loading, licensedLoading, isLicensedAgent, navigate, location.pathname]);
 
   if (loading || licensedLoading || centerCheckLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-2 text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
+    // Avoid full-screen loaders so the app shell remains visible.
+    // Page-level loading states still handle data fetching UX.
+    return user ? <>{children}</> : null;
   }
 
   if (!user) {

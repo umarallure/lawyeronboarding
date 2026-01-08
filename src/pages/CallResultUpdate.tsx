@@ -55,6 +55,7 @@ const CallResultUpdate = () => {
   const submissionId = searchParams.get("submissionId");
   const formId = searchParams.get("formId");
   const fromCallback = searchParams.get("fromCallback");
+  const assignedAttorneyId = searchParams.get("assignedAttorneyId");
   const [lead, setLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -281,6 +282,7 @@ const CallResultUpdate = () => {
                 <CallResultForm 
                   submissionId={submissionId!} 
                   customerName={lead.customer_full_name}
+                  initialAssignedAttorneyId={assignedAttorneyId || undefined}
                   onSuccess={() => navigate(`/call-result-journey?submissionId=${submissionId}`)}
                 />
               </div>
@@ -302,6 +304,7 @@ const CallResultUpdate = () => {
               <CallResultForm 
                 submissionId={submissionId!} 
                 customerName={lead.customer_full_name}
+                initialAssignedAttorneyId={assignedAttorneyId || undefined}
                 onSuccess={() => navigate(`/call-result-journey?submissionId=${submissionId}`)}
               />
             </div>

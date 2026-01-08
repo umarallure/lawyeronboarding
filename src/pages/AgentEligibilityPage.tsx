@@ -6,7 +6,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { NavigationHeader } from '@/components/NavigationHeader';
 import AetnaStateAvailabilityManager from '@/components/AetnaStateAvailabilityManager';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -584,8 +583,6 @@ export function AgentEligibilityPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <NavigationHeader title="Agent Eligibility Management" />
-      
       <main className="container mx-auto px-4 py-8">
         <div className="space-y-6">
           {/* Header */}

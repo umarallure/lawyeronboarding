@@ -13,7 +13,6 @@ import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { CallbackRequestForm } from '@/components/CallbackRequestForm';
 import { CenterCreateLeadModal } from '@/components/CenterCreateLeadModal';
-import { NavigationHeader } from '@/components/NavigationHeader';
 
 type Lead = {
   id: string;
@@ -172,9 +171,6 @@ const CenterLeadPortal = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <NavigationHeader title="Center Lead Portal" />
-
       <div className="container mx-auto px-4 py-8">
         {/* Center Info Badge */}
         <div className="mb-6">

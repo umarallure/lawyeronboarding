@@ -1,18 +1,11 @@
 import { useState } from "react";
 import BulkLookup from "@/components/BulkLookup";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { NavigationHeader } from "@/components/NavigationHeader";
-import { useNavigate } from "react-router-dom";
+ 
 
 const BulkLookupPage = () => {
-  const navigate = useNavigate();
-
   return (
     <div className="min-h-screen bg-background">
-      <NavigationHeader 
-        title="Bulk Duplicate Lookup" 
-        showBackButton={false}
-      />
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-7xl mx-auto space-y-6">
           {/* Description */}

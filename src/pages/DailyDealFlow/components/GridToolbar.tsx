@@ -7,6 +7,7 @@ import { format } from "date-fns";
 import { Search, X, Filter } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCenters } from "@/hooks/useCenters";
+import type { AttorneyProfile } from "@/hooks/useAttorneys";
 
 interface GridToolbarProps {
   searchTerm: string;
@@ -21,6 +22,9 @@ interface GridToolbarProps {
   onBufferAgentFilterChange: (value: string) => void;
   licensedAgentFilter: string;
   onLicensedAgentFilterChange: (value: string) => void;
+  assignedAttorneyFilter: string;
+  onAssignedAttorneyFilterChange: (value: string) => void;
+  attorneys: AttorneyProfile[];
   leadVendorFilter: string;
   onLeadVendorFilterChange: (value: string) => void;
   statusFilter: string;
@@ -47,6 +51,9 @@ export const GridToolbar = ({
   onBufferAgentFilterChange,
   licensedAgentFilter,
   onLicensedAgentFilterChange,
+  assignedAttorneyFilter,
+  onAssignedAttorneyFilterChange,
+  attorneys,
   leadVendorFilter,
   onLeadVendorFilterChange,
   statusFilter,
@@ -155,6 +162,7 @@ export const GridToolbar = ({
     onDateToFilterChange(undefined);
     onBufferAgentFilterChange(ALL_OPTION);
     onLicensedAgentFilterChange(ALL_OPTION);
+    onAssignedAttorneyFilterChange(ALL_OPTION);
     onLeadVendorFilterChange(ALL_OPTION);
     onStatusFilterChange(ALL_OPTION);
     onCallResultFilterChange(ALL_OPTION);
@@ -165,6 +173,7 @@ export const GridToolbar = ({
   const hasActiveFilters = searchTerm || dateFilter || dateFromFilter || dateToFilter ||
     (bufferAgentFilter && bufferAgentFilter !== ALL_OPTION) || 
     (licensedAgentFilter && licensedAgentFilter !== ALL_OPTION) || 
+    (assignedAttorneyFilter && assignedAttorneyFilter !== ALL_OPTION) ||
     (leadVendorFilter && leadVendorFilter !== ALL_OPTION) || 
     (statusFilter && statusFilter !== ALL_OPTION) || 
     (callResultFilter && callResultFilter !== ALL_OPTION) ||
@@ -322,7 +331,7 @@ export const GridToolbar = ({
       </div>
 
       {/* Second Row: Additional Filters */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-8 gap-4">
         {/* Buffer Agent Filter */}
         <div>
           <Label className="text-sm font-medium">
@@ -359,6 +368,30 @@ export const GridToolbar = ({
                   {agent}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Assigned Attorney Filter */}
+        <div>
+          <Label className="text-sm font-medium">
+            Assigned Attorney
+            {assignedAttorneyFilter && assignedAttorneyFilter !== ALL_OPTION && <span className="text-blue-600 ml-1">●</span>}
+          </Label>
+          <Select value={assignedAttorneyFilter || ALL_OPTION} onValueChange={onAssignedAttorneyFilterChange}>
+            <SelectTrigger className={cn("mt-1", assignedAttorneyFilter && assignedAttorneyFilter !== ALL_OPTION && "ring-2 ring-blue-200")}>
+              <SelectValue placeholder="All Attorneys" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_OPTION}>All Attorneys</SelectItem>
+              {attorneys.map((attorney) => {
+                const label = attorney.full_name?.trim() || attorney.primary_email?.trim() || attorney.user_id;
+                return (
+                  <SelectItem key={attorney.user_id} value={attorney.user_id}>
+                    {label}
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
         </div>

@@ -12,7 +12,6 @@ import { Download, Users, Phone, PhoneCall, UserCheck, TrendingUp, TrendingDown,
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { NavigationHeader } from "@/components/NavigationHeader";
 
 interface AgentStats {
   agent_name: string;
@@ -492,8 +491,6 @@ export const ReportsPage = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <NavigationHeader title="Agent Performance Reports" />
-
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-7xl mx-auto space-y-6">
           {/* Header */}

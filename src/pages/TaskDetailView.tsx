@@ -7,7 +7,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { NavigationHeader } from "@/components/NavigationHeader";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { 
@@ -519,7 +518,6 @@ const TaskDetailView = () => {
   if (!task) {
     return (
       <div className="min-h-screen bg-background">
-        <NavigationHeader title="Task Not Found" />
         <div className="container mx-auto px-4 py-8">
           <Card>
             <CardContent className="py-8 text-center">
@@ -537,7 +535,6 @@ const TaskDetailView = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <NavigationHeader title="Task Details" />
       <div className="container mx-auto px-4 py-6">
         {/* Back Button */}
         <Button 

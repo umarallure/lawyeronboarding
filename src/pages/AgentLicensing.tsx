@@ -1,11 +1,9 @@
-import { NavigationHeader } from '@/components/NavigationHeader';
 import EligibleAgentFinder from '@/components/EligibleAgentFinder';
 import { Search } from 'lucide-react';
 
 export default function AgentLicensing() {
   return (
     <div className="min-h-screen bg-background">
-      <NavigationHeader title="Find Eligible Agents" />
       <div className="container mx-auto px-4 py-8">
         <div className="mb-6">
           <h1 className="text-3xl font-bold flex items-center gap-2">

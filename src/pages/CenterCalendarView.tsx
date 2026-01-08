@@ -13,7 +13,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Calendar, User, Phone, DollarSign, Edit } from 'lucide-react';
 import { CenterCalendarComponent } from '@/components/CenterCalendarComponent';
 import { PlacementStatusModal } from '@/components/PlacementStatusModal';
-import { NavigationHeader } from '@/components/NavigationHeader';
 
 type Lead = {
   id: string;
@@ -263,8 +262,6 @@ const CenterCalendarView = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <NavigationHeader title="Leads Calendar" />
-
       <div className="container mx-auto px-4 py-8">
         {/* Center Info Badge */}
         <div className="mb-6">

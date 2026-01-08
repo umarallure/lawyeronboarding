@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { getCurrentTimestampEST } from "@/lib/dateUtils";
 import { useCenters } from "@/hooks/useCenters";
+import type { AttorneyProfile } from "@/hooks/useAttorneys";
 
 // Helper function to create Date object from YYYY-MM-DD string without timezone conversion
 const createDateFromString = (dateString: string): Date => {
@@ -42,6 +43,8 @@ interface EditableRowProps {
   onUpdate: () => void;
   hasWritePermissions?: boolean;
   isDuplicate?: boolean;
+  attorneyById?: Record<string, { full_name: string | null; primary_email: string | null }>;
+  attorneys?: AttorneyProfile[];
 }
 
 // Dropdown options (same as CallResultForm)
@@ -91,7 +94,7 @@ const callResultOptions = [
   "Submitted", "Underwriting", "Not Submitted"
 ];
 
-export const EditableRow = ({ row, rowIndex, serialNumber, onUpdate, hasWritePermissions = true, isDuplicate = false }: EditableRowProps) => {
+export const EditableRow = ({ row, rowIndex, serialNumber, onUpdate, hasWritePermissions = true, isDuplicate = false, attorneyById, attorneys = [] }: EditableRowProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<DailyDealFlowRow>(row);
   const [isSaving, setIsSaving] = useState(false);
@@ -943,19 +946,25 @@ export const EditableRow = ({ row, rowIndex, serialNumber, onUpdate, hasWritePer
             </Select>
           </td>
 
-          {/* Licensed Account */}
+          {/* Assigned Attorney */}
           <td className="border border-border px-3 py-2">
             <Select
-              value={editData.licensed_agent_account || ''}
-              onValueChange={(value) => updateField('licensed_agent_account', value)}
+              value={editData.assigned_attorney_id || '__NONE__'}
+              onValueChange={(value) => updateField('assigned_attorney_id', value === '__NONE__' ? null : value)}
             >
               <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder="Licensed" />
+                <SelectValue placeholder="Attorney" />
               </SelectTrigger>
               <SelectContent>
-                {licensedAccountOptions.map(option => (
-                  <SelectItem key={option} value={option}>{option}</SelectItem>
-                ))}
+                <SelectItem value="__NONE__">Unassigned</SelectItem>
+                {attorneys.map((attorney) => {
+                  const label = attorney.full_name?.trim() || attorney.primary_email?.trim() || attorney.user_id;
+                  return (
+                    <SelectItem key={attorney.user_id} value={attorney.user_id}>
+                      {label}
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </td>
@@ -1044,6 +1053,13 @@ export const EditableRow = ({ row, rowIndex, serialNumber, onUpdate, hasWritePer
   }
 
   // Display mode
+  const assignedAttorneyLabel = (() => {
+    const assignedId = row.assigned_attorney_id ?? undefined;
+    if (!assignedId) return '';
+    const profile = attorneyById?.[assignedId];
+    return profile?.full_name?.trim() || profile?.primary_email?.trim() || '';
+  })();
+
   return (
     <>
       <tr className={`${getStatusColor(row.status)} ${isDuplicate ? 'bg-yellow-50' : ''} hover:bg-muted/50 transition-colors border`}>
@@ -1098,11 +1114,11 @@ export const EditableRow = ({ row, rowIndex, serialNumber, onUpdate, hasWritePer
           ) : ''}
         </td>
 
-        {/* Licensed Account */}
+        {/* Assigned Attorney */}
         <td className="border border-border px-2 py-2 text-sm w-28">
-          {row.licensed_agent_account ? (
-            <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap inline-block ${getLicensedAgentBadge(row.licensed_agent_account)}`}>
-              {row.licensed_agent_account.length > 10 ? row.licensed_agent_account.substring(0, 10) + '...' : row.licensed_agent_account}
+          {assignedAttorneyLabel ? (
+            <span className="px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap inline-block bg-muted text-foreground">
+              {assignedAttorneyLabel.length > 16 ? assignedAttorneyLabel.substring(0, 16) + '...' : assignedAttorneyLabel}
             </span>
           ) : ''}
         </td>

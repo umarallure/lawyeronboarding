@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Filter, Phone, User, Eye, Clock, UserPlus, ChevronDown, ChevronUp } from 'lucide-react';
-import { NavigationHeader } from '@/components/NavigationHeader';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { isRestrictedUser } from '@/lib/userPermissions';
@@ -555,11 +554,7 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <NavigationHeader title="Agent Dashboard" />
-
-      <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8">
 
         {/* Filters */}
         <Card className="mb-6">
@@ -630,7 +625,7 @@ const Dashboard = () => {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-semibold">Quick Actions</h3>
+                <h3 className="font-semibold">Quick Actions</h3>
                 <p className="text-sm text-muted-foreground">Create new callbacks or manage leads</p>
               </div>
               <Button 
@@ -677,7 +672,9 @@ const Dashboard = () => {
                               tabIndex={0}
                               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleExpand(lead.id); } }}
                             >
-                              <h3 className="text-lg font-semibold group-hover:underline">{lead.customer_full_name}</h3>
+                              <h3 className="text-lg font-semibold group-hover:underline">
+                                {(lead.customer_full_name || 'N/A') + ' - ' + (lead.lead_vendor || 'N/A')}
+                              </h3>
                               <Badge className={getStatusColor(getLeadStatus(lead))}>
                                 {getLeadStatus(lead)}
                               </Badge>
@@ -927,8 +924,7 @@ const Dashboard = () => {
                 </>
               )}
             </div>
-        </div>
-      </div>
+          </div>
       
       {/* Claim Call Modals */}
       <ClaimDroppedCallModal

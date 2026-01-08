@@ -103,7 +103,7 @@ serve(async (req)=>{
     const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
     // Get parameters from request body
     requestBody = await req.json();
-    const { submission_id, call_source, buffer_agent, agent, licensed_agent_account, status, call_result, carrier, product_type, draft_date, monthly_premium, face_amount, notes, policy_number, carrier_audit, product_type_carrier, level_or_gi, from_callback, is_callback = false, create_new_entry = false, original_submission_id = null, application_submitted = null, sent_to_underwriting = null, lead_vendor, is_retention_call = false, carrier_attempted_1 = null, carrier_attempted_2 = null, carrier_attempted_3 = null, accident_date = null, prior_attorney_involved = null, prior_attorney_details = null, medical_attention = null, police_attended = null, accident_location = null, accident_scenario = null, insured = null, injuries = null, vehicle_registration = null, insurance_company = null, third_party_vehicle_registration = null, other_party_admit_fault = null, passengers_count = null } = requestBody;
+    const { submission_id, call_source, buffer_agent, agent, licensed_agent_account, status, call_result, carrier, product_type, draft_date, monthly_premium, face_amount, notes, policy_number, carrier_audit, product_type_carrier, level_or_gi, from_callback, is_callback = false, create_new_entry = false, original_submission_id = null, application_submitted = null, sent_to_underwriting = null, lead_vendor, is_retention_call = false, carrier_attempted_1 = null, carrier_attempted_2 = null, carrier_attempted_3 = null, accident_date = null, prior_attorney_involved = null, prior_attorney_details = null, medical_attention = null, police_attended = null, accident_location = null, accident_scenario = null, insured = null, injuries = null, vehicle_registration = null, insurance_company = null, third_party_vehicle_registration = null, other_party_admit_fault = null, passengers_count = null, assigned_attorney_id = null } = requestBody;
     // Validate required fields
     if (!submission_id) {
       throw new Error('Missing required field: submission_id');
@@ -167,7 +167,8 @@ serve(async (req)=>{
           level_or_gi,
           from_callback,
           is_callback,
-          is_retention_call
+          is_retention_call,
+          assigned_attorney_id
         }).select().single();
         if (error) {
           console.error('Error inserting new daily deal flow entry:', error);
@@ -221,6 +222,7 @@ serve(async (req)=>{
             from_callback,
             is_callback,
             is_retention_call,
+            assigned_attorney_id,
             updated_at: getCurrentTimestampEST()
           }).eq('id', mostRecentEntry.id).select().single();
           if (error) {
@@ -271,7 +273,8 @@ serve(async (req)=>{
             insurance_company,
             third_party_vehicle_registration,
             other_party_admit_fault,
-            passengers_count
+            passengers_count,
+            assigned_attorney_id
           }).select().single();
           if (error) {
             console.error('Error inserting new daily deal flow entry:', error);
@@ -341,6 +344,7 @@ serve(async (req)=>{
           from_callback,
           is_callback,
           is_retention_call,
+          assigned_attorney_id,
           updated_at: getCurrentTimestampEST()
         }).eq('id', existingEntry.id).select().single();
         if (error) {
@@ -391,7 +395,8 @@ serve(async (req)=>{
           insurance_company,
           third_party_vehicle_registration,
           other_party_admit_fault,
-          passengers_count
+          passengers_count,
+          assigned_attorney_id
         }).select().single();
         if (error) {
           console.error('Error inserting new daily deal flow entry:', error);
