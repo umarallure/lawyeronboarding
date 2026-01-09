@@ -607,7 +607,7 @@ const BulkLookup = () => {
                   <tbody>
                     {results.slice(0, 50).map((result, index) => (
                       <tr key={index} className="border-b hover:bg-gray-50">
-                        <td className="p-1 border-r text-xs font-mono">{result.submission_id}</td>
+                        <td className="p-1 border-r text-xs">{result.submission_id}</td>
                         <td className="p-1 border-r font-medium">{result.insured_name}</td>
                         <td className="p-1 border-r">{result.client_phone_number}</td>
                         <td className="p-1 border-r">{result.lead_vendor}</td>

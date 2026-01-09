@@ -71,7 +71,7 @@ export const TimezoneTestPanel: React.FC = () => {
           {Object.keys(testResults).length > 0 && (
             <div className="bg-gray-50 p-4 rounded-lg">
               <h3 className="font-semibold mb-2">Test Results:</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm font-mono">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
                 {Object.entries(testResults).map(([key, value]) => (
                   <div key={key} className="flex justify-between border-b pb-1">
                     <span className="font-medium text-blue-600">{key}:</span>

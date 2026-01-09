@@ -19,13 +19,17 @@ import { logCallUpdate, getLeadInfo } from "@/lib/callLogging";
 import { AppFixTaskTypeSelector } from "@/components/AppFixTaskTypeSelector";
 import { useCenters } from "@/hooks/useCenters";
 import { useAttorneys } from "@/hooks/useAttorneys";
+import type { Database } from "@/integrations/supabase/types";
 
 interface CallResultFormProps {
   submissionId: string;
   customerName?: string;
   onSuccess?: () => void;
   initialAssignedAttorneyId?: string;
+  verificationSessionId?: string;
 }
+
+type LeadsUpdate = Database["public"]["Tables"]["leads"]["Update"];
 
 const statusOptions = [
   "Incomplete Transfer",
@@ -419,7 +423,7 @@ const combineNotes = (structuredNotes: string, additionalNotes: string) => {
   return structuredNotes + '\n\n' + additionalNotes;
 };
 
-export const CallResultForm = ({ submissionId, customerName, onSuccess, initialAssignedAttorneyId }: CallResultFormProps) => {
+export const CallResultForm = ({ submissionId, customerName, onSuccess, initialAssignedAttorneyId, verificationSessionId }: CallResultFormProps) => {
   const [applicationSubmitted, setApplicationSubmitted] = useState<boolean | null>(null);
   const [status, setStatus] = useState("");
   const [statusReason, setStatusReason] = useState("");
@@ -824,6 +828,111 @@ export const CallResultForm = ({ submissionId, customerName, onSuccess, initialA
       const clientName = customerName || "[Client Name]";
       setNotes(getNoteText(status, statusReason, clientName, date));
     }
+  };
+
+  const syncModifiedVerifiedFieldsToLeads = async () => {
+    const booleanFields = new Set([
+      "police_attended",
+      "insured",
+      "other_party_admit_fault",
+      "prior_attorney_involved",
+    ]);
+
+    const numberFields = new Set(["age", "passengers_count"]);
+
+    const allowedFields = new Set([
+      "lead_vendor",
+      "customer_full_name",
+      "date_of_birth",
+      "age",
+      "birth_state",
+      "social_security",
+      "driver_license",
+      "street_address",
+      "city",
+      "state",
+      "zip_code",
+      "phone_number",
+      "email",
+      "accident_date",
+      "accident_location",
+      "accident_scenario",
+      "injuries",
+      "medical_attention",
+      "police_attended",
+      "insured",
+      "vehicle_registration",
+      "insurance_company",
+      "third_party_vehicle_registration",
+      "other_party_admit_fault",
+      "passengers_count",
+      "prior_attorney_involved",
+      "prior_attorney_details",
+      "contact_name",
+      "contact_number",
+      "contact_address",
+      "additional_notes",
+    ]);
+
+    let effectiveSessionId = verificationSessionId;
+
+    if (!effectiveSessionId) {
+      const { data: verificationSession } = await supabase
+        .from("verification_sessions")
+        .select("id")
+        .eq("submission_id", submissionId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      effectiveSessionId = verificationSession?.id ?? undefined;
+    }
+
+    if (!effectiveSessionId) return;
+
+    const { data: items, error } = await supabase
+      .from("verification_items")
+      .select("field_name, verified_value, original_value, is_modified, is_verified")
+      .eq("session_id", effectiveSessionId);
+
+    if (error) throw error;
+    if (!items || items.length === 0) return;
+
+    const updates: LeadsUpdate = {};
+
+    for (const item of items) {
+      if (!item.is_verified || !item.is_modified) continue;
+      const fieldName = item.field_name;
+      if (!allowedFields.has(fieldName)) continue;
+
+      const raw = (item.verified_value ?? item.original_value ?? "").toString().trim();
+      if (!raw.length) {
+        (updates as any)[fieldName] = null;
+        continue;
+      }
+
+      if (booleanFields.has(fieldName)) {
+        (updates as any)[fieldName] = raw.toLowerCase() === "true";
+        continue;
+      }
+
+      if (numberFields.has(fieldName)) {
+        const parsed = Number(raw);
+        (updates as any)[fieldName] = Number.isFinite(parsed) ? parsed : null;
+        continue;
+      }
+
+      (updates as any)[fieldName] = raw;
+    }
+
+    if (Object.keys(updates).length === 0) return;
+
+    const { error: leadUpdateError } = await supabase
+      .from("leads")
+      .update({ ...updates, updated_at: getCurrentTimestampEST() })
+      .eq("submission_id", submissionId);
+
+    if (leadUpdateError) throw leadUpdateError;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1247,6 +1356,19 @@ export const CallResultForm = ({ submissionId, customerName, onSuccess, initialA
 
       // Personal sales portal notification has been removed
       // Previously checked for licensedAgentAccount but this field is no longer used
+
+      try {
+        await syncModifiedVerifiedFieldsToLeads();
+      } catch (leadSyncError: any) {
+        console.error("Failed to sync verification edits to leads:", leadSyncError);
+        toast({
+          title: "Warning",
+          description:
+            leadSyncError?.message ||
+            "Call result saved, but updating the lead record failed. Please try saving again.",
+          variant: "destructive",
+        });
+      }
 
       toast({
         title: "Success",

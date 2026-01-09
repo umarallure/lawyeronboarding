@@ -275,7 +275,7 @@ export const CreateEntryForm = ({ onSuccess }: CreateEntryFormProps) => {
                 <Input
                   value={formData.submission_id}
                   readOnly
-                  className="bg-gray-50 font-mono text-sm"
+                  className="bg-gray-50 text-sm"
                 />
               </div>
 

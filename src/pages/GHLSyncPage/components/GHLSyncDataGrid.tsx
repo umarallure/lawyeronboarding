@@ -718,7 +718,7 @@ export const GHLSyncDataGrid = ({
                   {formatDate(row.date)}
                 </TableCell>
                 <TableCell>{row.insured_name || 'N/A'}</TableCell>
-                <TableCell className='font-mono text-sm'>
+                <TableCell className='text-sm'>
                   {row.client_phone_number || 'N/A'}
                 </TableCell>
                 <TableCell>{row.lead_vendor || 'N/A'}</TableCell>

@@ -505,7 +505,7 @@ export const AgentReportsAndLogs = () => {
                         </td>
                         <td className="border border-gray-300 p-2">{log.customer_name || '-'}</td>
                         <td className="border border-gray-300 p-2">{log.lead_vendor || '-'}</td>
-                        <td className="border border-gray-300 p-2 font-mono text-sm">{log.submission_id}</td>
+                        <td className="border border-gray-300 p-2 text-sm">{log.submission_id}</td>
                       </tr>
                     ))}
                   </tbody>

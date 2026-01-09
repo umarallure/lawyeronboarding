@@ -644,11 +644,11 @@ const TaskDetailView = () => {
                         </div>
                         <div>
                           <p className="font-medium text-blue-700">Routing Number:</p>
-                          <p className="text-blue-900 font-mono">{existingBankDetails.routing_number || 'Not provided'}</p>
+                          <p className="text-blue-900">{existingBankDetails.routing_number || 'Not provided'}</p>
                         </div>
                         <div>
                           <p className="font-medium text-blue-700">Account Number:</p>
-                          <p className="text-blue-900 font-mono">{existingBankDetails.account_number || 'Not provided'}</p>
+                          <p className="text-blue-900">{existingBankDetails.account_number || 'Not provided'}</p>
                         </div>
                         <div>
                           <p className="font-medium text-blue-700">Account Type:</p>
@@ -688,11 +688,11 @@ const TaskDetailView = () => {
                     </div>
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Routing Number</p>
-                      <p className="text-sm font-mono mt-1">{bankingDetails.routing_number}</p>
+                      <p className="text-sm mt-1">{bankingDetails.routing_number}</p>
                     </div>
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Account Number</p>
-                      <p className="text-sm font-mono mt-1">{bankingDetails.account_number}</p>
+                      <p className="text-sm mt-1">{bankingDetails.account_number}</p>
                     </div>
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Account Type</p>

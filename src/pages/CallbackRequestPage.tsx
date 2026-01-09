@@ -375,7 +375,7 @@ const CallbackRequestPage = () => {
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">Submission ID</Label>
-                    <p className="text-base font-mono text-sm">{lead.submission_id}</p>
+                    <p className="text-sm">{lead.submission_id}</p>
                   </div>
                 </div>
               </CardContent>

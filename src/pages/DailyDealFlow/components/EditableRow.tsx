@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -95,6 +96,7 @@ const callResultOptions = [
 ];
 
 export const EditableRow = ({ row, rowIndex, serialNumber, onUpdate, hasWritePermissions = true, isDuplicate = false, attorneyById, attorneys = [] }: EditableRowProps) => {
+  const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<DailyDealFlowRow>(row);
   const [isSaving, setIsSaving] = useState(false);
@@ -540,7 +542,7 @@ export const EditableRow = ({ row, rowIndex, serialNumber, onUpdate, hasWritePer
 
             <div>
               <Label className="text-sm font-medium">Submission ID</Label>
-              <div className="mt-1 p-2 bg-muted rounded text-sm font-mono">
+              <div className="mt-1 p-2 bg-muted rounded text-sm">
                 {row.submission_id || 'N/A'}
               </div>
             </div>
@@ -1038,7 +1040,7 @@ export const EditableRow = ({ row, rowIndex, serialNumber, onUpdate, hasWritePer
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => setShowDetailsDialog(true)}
+                  onClick={() => navigate(`/daily-deal-flow/lead/${row.id}`)}
                   className="h-7 w-7 p-0"
                 >
                   <Eye className="h-3 w-3" />
@@ -1091,7 +1093,7 @@ export const EditableRow = ({ row, rowIndex, serialNumber, onUpdate, hasWritePer
 
         {/* Phone Number */}
         <td className="border border-border px-3 py-2 text-sm w-28">
-          <div className="font-mono text-gray-700">
+          <div className="text-gray-700">
             {row.client_phone_number || ''}
           </div>
         </td>
@@ -1164,7 +1166,7 @@ export const EditableRow = ({ row, rowIndex, serialNumber, onUpdate, hasWritePer
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => { setShowDetailsDialog(true); }}
+                onClick={() => navigate(`/daily-deal-flow/lead/${row.id}`)}
                 className="h-7 w-7 p-0"
                 title="View & edit details"
               >

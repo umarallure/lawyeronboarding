@@ -254,11 +254,11 @@ export const AppFixBankingForm = ({
                   </div>
                   <div>
                     <span className="font-medium text-gray-700">Routing Number:</span>
-                    <p className="text-gray-900 font-mono">{existingBankDetails.routing_number || 'Not provided'}</p>
+                    <p className="text-gray-900">{existingBankDetails.routing_number || 'Not provided'}</p>
                   </div>
                   <div>
                     <span className="font-medium text-gray-700">Account Number:</span>
-                    <p className="text-gray-900 font-mono">
+                    <p className="text-gray-900">
                       {existingBankDetails.account_number || 'Not provided'}
                     </p>
                   </div>

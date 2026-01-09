@@ -20,6 +20,8 @@ import CallResultUpdate from "./pages/CallResultUpdate";
 import CallResultJourney from "./pages/CallResultJourney";
 import NewCallback from "./pages/NewCallback";
 import DailyDealFlowPage from "./pages/DailyDealFlow/DailyDealFlowPage";
+import DailyDealFlowLeadDetailsPage from "./pages/DailyDealFlow/DailyDealFlowLeadDetailsPage";
+import LeadDetailsPage from "./pages/LeadDetails/LeadDetailsPage";
 import TransferPortalPage from "./pages/TransferPortalPage";
 import SubmissionPortalPage from "./pages/SubmissionPortalPage";
 import BulkLookupPage from "./pages/BulkLookupPage";
@@ -132,6 +134,16 @@ const App = () => (
               } 
             />
             <Route 
+              path="/leads/:submissionId" 
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Lead Details">
+                    <LeadDetailsPage />
+                  </AppShell>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
               path="/analytics" 
               element={
                 <ProtectedRoute>
@@ -145,8 +157,26 @@ const App = () => (
               path="/daily-deal-flow" 
               element={
                 <ProtectedRoute>
-                  <AppShell title="Daily Deal Flow">
+                  <AppShell
+                    title="Daily Deal Flow"
+                    defaultSidebarCollapsed
+                    autoCollapseSidebarAfterMs={2000}
+                  >
                     <DailyDealFlowPage />
+                  </AppShell>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/daily-deal-flow/lead/:id" 
+              element={
+                <ProtectedRoute>
+                  <AppShell
+                    title="Lead Details"
+                    defaultSidebarCollapsed
+                    autoCollapseSidebarAfterMs={2000}
+                  >
+                    <DailyDealFlowLeadDetailsPage />
                   </AppShell>
                 </ProtectedRoute>
               } 

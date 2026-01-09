@@ -838,7 +838,7 @@ const Dashboard = () => {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => navigate(`/call-result-update?submissionId=${lead.submission_id}`)}
+                              onClick={() => navigate(`/leads/${encodeURIComponent(lead.submission_id)}`)}
                               className="flex items-center gap-2"
                             >
                               <Eye className="h-4 w-4" />

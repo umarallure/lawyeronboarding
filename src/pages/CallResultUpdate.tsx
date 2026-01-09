@@ -283,6 +283,7 @@ const CallResultUpdate = () => {
                   submissionId={submissionId!} 
                   customerName={lead.customer_full_name}
                   initialAssignedAttorneyId={assignedAttorneyId || undefined}
+                  verificationSessionId={verificationSessionId || undefined}
                   onSuccess={() => navigate(`/call-result-journey?submissionId=${submissionId}`)}
                 />
               </div>
@@ -305,6 +306,7 @@ const CallResultUpdate = () => {
                 submissionId={submissionId!} 
                 customerName={lead.customer_full_name}
                 initialAssignedAttorneyId={assignedAttorneyId || undefined}
+                verificationSessionId={verificationSessionId || undefined}
                 onSuccess={() => navigate(`/call-result-journey?submissionId=${submissionId}`)}
               />
             </div>
