@@ -61,6 +61,7 @@ const CallResultUpdate = () => {
   const [processing, setProcessing] = useState(false);
   const [verificationSessionId, setVerificationSessionId] = useState<string | null>(null);
   const [showVerificationPanel, setShowVerificationPanel] = useState(false);
+  const [verifiedFieldValues, setVerifiedFieldValues] = useState<Record<string, string>>({});
 
   const { toast } = useToast();
 
@@ -78,6 +79,37 @@ const CallResultUpdate = () => {
     fetchLead();
     checkExistingVerificationSession();
   }, [submissionId]);
+
+  useEffect(() => {
+    const seedVerifiedFields = async () => {
+      if (!verificationSessionId) return;
+
+      try {
+        const { data: items, error } = await supabase
+          .from('verification_items')
+          .select('field_name, verified_value, original_value')
+          .eq('session_id', verificationSessionId)
+          .eq('is_verified', true);
+
+        if (error) throw error;
+
+        const seeded: Record<string, string> = {};
+        (items || []).forEach((item: any) => {
+          const value = item.verified_value ?? item.original_value ?? '';
+          if (!value || value === 'null' || value === 'undefined') return;
+          seeded[item.field_name] = String(value);
+        });
+
+        if (Object.keys(seeded).length > 0) {
+          setVerifiedFieldValues(prev => ({ ...prev, ...seeded }));
+        }
+      } catch (e) {
+        console.error('Error seeding verified fields:', e);
+      }
+    };
+
+    seedVerifiedFields();
+  }, [verificationSessionId]);
 
   const checkExistingVerificationSession = async () => {
     try {
@@ -106,6 +138,22 @@ const CallResultUpdate = () => {
     toast({
       title: "Verification Complete",
       description: "Lead is now ready for Licensed Agent review",
+    });
+  };
+
+  const handleFieldVerified = (fieldName: string, value: string, checked: boolean) => {
+    setVerifiedFieldValues(prev => {
+      if (checked) {
+        return {
+          ...prev,
+          [fieldName]: value,
+        };
+      }
+
+      if (!(fieldName in prev)) return prev;
+      const next = { ...prev };
+      delete next[fieldName];
+      return next;
     });
   };
 
@@ -274,6 +322,7 @@ const CallResultUpdate = () => {
                 <VerificationPanel 
                   sessionId={verificationSessionId}
                   onTransferReady={handleTransferReady}
+                  onFieldVerified={handleFieldVerified}
                 />
               </div>
               
@@ -284,6 +333,7 @@ const CallResultUpdate = () => {
                   customerName={lead.customer_full_name}
                   initialAssignedAttorneyId={assignedAttorneyId || undefined}
                   verificationSessionId={verificationSessionId || undefined}
+                  verifiedFieldValues={verifiedFieldValues}
                   onSuccess={() => navigate(`/call-result-journey?submissionId=${submissionId}`)}
                 />
               </div>

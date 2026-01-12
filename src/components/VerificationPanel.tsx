@@ -63,9 +63,10 @@ import { useRealtimeVerification, VerificationItem } from "@/hooks/useRealtimeVe
 interface VerificationPanelProps {
   sessionId: string;
   onTransferReady?: () => void;
+  onFieldVerified?: (fieldName: string, value: string, checked: boolean) => void;
 }
 
-export const VerificationPanel = ({ sessionId, onTransferReady }: VerificationPanelProps) => {
+export const VerificationPanel = ({ sessionId, onTransferReady, onFieldVerified }: VerificationPanelProps) => {
   // Helper to get lead data from verificationItems
   const getLeadData = () => {
     const leadData: Record<string, string> = {};
@@ -235,6 +236,14 @@ export const VerificationPanel = ({ sessionId, onTransferReady }: VerificationPa
 
   const handleCheckboxChange = (itemId: string, checked: boolean) => {
     toggleVerification(itemId, checked);
+
+    if (!onFieldVerified || !verificationItems) return;
+
+    const item = verificationItems.find(v => v.id === itemId);
+    if (!item) return;
+
+    const value = inputValues[itemId] || item.verified_value || item.original_value || '';
+    onFieldVerified(item.field_name, value, checked);
   };
 
   const handleTransferToLA = async () => {

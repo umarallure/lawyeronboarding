@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -27,6 +27,7 @@ interface CallResultFormProps {
   onSuccess?: () => void;
   initialAssignedAttorneyId?: string;
   verificationSessionId?: string;
+  verifiedFieldValues?: Record<string, string>;
 }
 
 type LeadsUpdate = Database["public"]["Tables"]["leads"]["Update"];
@@ -65,32 +66,6 @@ const productTypeOptions = [
   "Level",
   "ROP",
   "N/A"
-];
-
-const bufferAgentOptions = [
-  "Justine",
-  "Nicole Mejia",
-  "Laiza Batain",
-  "Aqib Afridi",
-  "Qasim Raja",
-  "Noah Akins",
-  "Hussain Khan",
-  "N/A",
-];
-
-const agentOptions = [
-  "Claudia",
-  "Lydia",
-  "Zack",
-  "Tatumn",
-  "Benjamin",
-  "N/A",
-  "Kaye",
-  "Isaac",
-  "Abdul",
-  "Nicole Mejia",
-  "Precy Lou",
-  "Laiza Batain"
 ];
 
 const licensedAccountOptions = [
@@ -423,8 +398,8 @@ const combineNotes = (structuredNotes: string, additionalNotes: string) => {
   return structuredNotes + '\n\n' + additionalNotes;
 };
 
-export const CallResultForm = ({ submissionId, customerName, onSuccess, initialAssignedAttorneyId, verificationSessionId }: CallResultFormProps) => {
-  const [applicationSubmitted, setApplicationSubmitted] = useState<boolean | null>(null);
+export const CallResultForm = ({ submissionId, customerName, onSuccess, initialAssignedAttorneyId, verificationSessionId, verifiedFieldValues }: CallResultFormProps) => {
+  const [applicationSubmitted, setApplicationSubmitted] = useState<boolean | null>(true);
   const [status, setStatus] = useState("");
   const [statusReason, setStatusReason] = useState("");
   const [notes, setNotes] = useState("");
@@ -455,10 +430,190 @@ export const CallResultForm = ({ submissionId, customerName, onSuccess, initialA
   const [otherPartyAdmitFault, setOtherPartyAdmitFault] = useState<boolean | null>(null);
   const [passengersCount, setPassengersCount] = useState("");
   const [assignedAttorneyId, setAssignedAttorneyId] = useState<string>("");
+  const [agents, setAgents] = useState<Pick<Database["public"]["Tables"]["agents"]["Row"], "id" | "name">[]>([]);
+  const [agentsLoading, setAgentsLoading] = useState(false);
   
   const { toast } = useToast();
   const { leadVendors, loading: centersLoading } = useCenters();
   const { attorneys, loading: attorneysLoading } = useAttorneys();
+
+  const prevVerifiedFieldValuesRef = useRef<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!verifiedFieldValues) return;
+
+    const prev = prevVerifiedFieldValuesRef.current || {};
+    const removedKeys = Object.keys(prev).filter((k) => !(k in verifiedFieldValues));
+
+    removedKeys.forEach((fieldName) => {
+      switch (fieldName) {
+        case 'accident_date':
+          setAccidentDate(undefined);
+          break;
+        case 'accident_location':
+          setAccidentLocation('');
+          break;
+        case 'accident_scenario':
+          setAccidentScenario('');
+          break;
+        case 'injuries':
+          setInjuries('');
+          break;
+        case 'medical_attention':
+          setMedicalAttention('');
+          break;
+        case 'police_attended':
+          setPoliceAttended(null);
+          break;
+        case 'insured':
+          setInsured(null);
+          break;
+        case 'vehicle_registration':
+          setVehicleRegistration('');
+          break;
+        case 'insurance_company':
+          setInsuranceCompany('');
+          break;
+        case 'third_party_vehicle_registration':
+          setThirdPartyVehicleRegistration('');
+          break;
+        case 'other_party_admit_fault':
+          setOtherPartyAdmitFault(null);
+          break;
+        case 'passengers_count':
+          setPassengersCount('');
+          break;
+        case 'prior_attorney_involved':
+          setPriorAttorneyInvolved(null);
+          break;
+        case 'prior_attorney_details':
+          setPriorAttorneyDetails('');
+          break;
+        case 'additional_notes':
+          setNotes('');
+          break;
+        default:
+          break;
+      }
+    });
+
+    const normalizeBoolean = (value: string): boolean | null => {
+      const v = String(value).trim().toLowerCase();
+      if (v === 'true' || v === 'yes' || v === 'y' || v === '1') return true;
+      if (v === 'false' || v === 'no' || v === 'n' || v === '0') return false;
+      return null;
+    };
+
+    Object.entries(verifiedFieldValues).forEach(([fieldName, rawValue]) => {
+      const value = rawValue ?? '';
+      if (!value || value === 'null' || value === 'undefined') return;
+
+      switch (fieldName) {
+        case 'accident_date':
+          if (!accidentDate) {
+            const parsed = new Date(value);
+            if (!Number.isNaN(parsed.getTime())) setAccidentDate(parsed);
+          }
+          break;
+        case 'accident_location':
+          if (!accidentLocation) setAccidentLocation(value);
+          break;
+        case 'accident_scenario':
+          if (!accidentScenario) setAccidentScenario(value);
+          break;
+        case 'injuries':
+          if (!injuries) setInjuries(value);
+          break;
+        case 'medical_attention':
+          if (!medicalAttention) setMedicalAttention(value);
+          break;
+        case 'police_attended':
+          if (policeAttended === null) {
+            const b = normalizeBoolean(value);
+            if (b !== null) setPoliceAttended(b);
+          }
+          break;
+        case 'insured':
+          if (insured === null) {
+            const b = normalizeBoolean(value);
+            if (b !== null) setInsured(b);
+          }
+          break;
+        case 'vehicle_registration':
+          if (!vehicleRegistration) setVehicleRegistration(value);
+          break;
+        case 'insurance_company':
+          if (!insuranceCompany) setInsuranceCompany(value);
+          break;
+        case 'third_party_vehicle_registration':
+          if (!thirdPartyVehicleRegistration) setThirdPartyVehicleRegistration(value);
+          break;
+        case 'other_party_admit_fault':
+          if (otherPartyAdmitFault === null) {
+            const b = normalizeBoolean(value);
+            if (b !== null) setOtherPartyAdmitFault(b);
+          }
+          break;
+        case 'passengers_count':
+          if (!passengersCount) setPassengersCount(String(value));
+          break;
+        case 'prior_attorney_involved':
+          if (priorAttorneyInvolved === null) {
+            const b = normalizeBoolean(value);
+            if (b !== null) setPriorAttorneyInvolved(b);
+          }
+          break;
+        case 'prior_attorney_details':
+          if (!priorAttorneyDetails) setPriorAttorneyDetails(value);
+          break;
+        case 'additional_notes':
+          if (!notes.trim()) setNotes(value);
+          break;
+        default:
+          break;
+      }
+    });
+
+    prevVerifiedFieldValuesRef.current = verifiedFieldValues;
+  }, [
+    verifiedFieldValues,
+    accidentDate,
+    accidentLocation,
+    accidentScenario,
+    injuries,
+    medicalAttention,
+    policeAttended,
+    insured,
+    vehicleRegistration,
+    insuranceCompany,
+    thirdPartyVehicleRegistration,
+    otherPartyAdmitFault,
+    passengersCount,
+    priorAttorneyInvolved,
+    priorAttorneyDetails,
+    notes,
+  ]);
+
+  useEffect(() => {
+    const fetchAgents = async () => {
+      setAgentsLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('agents')
+          .select('id, name')
+          .order('name', { ascending: true });
+
+        if (error) throw error;
+        setAgents((data || []) as any);
+      } catch (e) {
+        console.error('Error fetching agents:', e);
+      } finally {
+        setAgentsLoading(false);
+      }
+    };
+
+    fetchAgents();
+  }, []);
 
   useEffect(() => {
     if (initialAssignedAttorneyId && !assignedAttorneyId) {
@@ -1381,7 +1536,7 @@ export const CallResultForm = ({ submissionId, customerName, onSuccess, initialA
       } else {
         // Reset form if no callback provided (only for new entries)
         if (!existingResult) {
-          setApplicationSubmitted(null);
+          setApplicationSubmitted(true);
           setStatus("");
           setStatusReason("");
           setNotes("");
@@ -1440,7 +1595,7 @@ export const CallResultForm = ({ submissionId, customerName, onSuccess, initialA
           {/* Primary Question */}
           <div className="space-y-3">
             <Label className="text-base font-semibold">
-              Was the application submitted?
+              Is lead qualified?
             </Label>
             <div className="flex gap-4">
               <Button
@@ -1521,11 +1676,14 @@ export const CallResultForm = ({ submissionId, customerName, onSuccess, initialA
                         <SelectValue placeholder="Select buffer agent" />
                       </SelectTrigger>
                       <SelectContent>
-                        {bufferAgentOptions.map((agent) => (
-                          <SelectItem key={agent} value={agent}>
-                            {agent}
+                        {agents.map((agent) => (
+                          <SelectItem key={agent.id} value={agent.name}>
+                            {agent.name}
                           </SelectItem>
                         ))}
+                        <SelectItem key="na_buffer" value="N/A">
+                          N/A
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1537,11 +1695,14 @@ export const CallResultForm = ({ submissionId, customerName, onSuccess, initialA
                         <SelectValue placeholder="Select agent" />
                       </SelectTrigger>
                       <SelectContent>
-                        {agentOptions.map((agent) => (
-                          <SelectItem key={agent} value={agent}>
-                            {agent}
+                        {agents.map((agent) => (
+                          <SelectItem key={agent.id} value={agent.name}>
+                            {agent.name}
                           </SelectItem>
                         ))}
+                        <SelectItem key="na_agent" value="N/A">
+                          N/A
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1818,11 +1979,14 @@ export const CallResultForm = ({ submissionId, customerName, onSuccess, initialA
                       <SelectValue placeholder="Select buffer agent" />
                     </SelectTrigger>
                     <SelectContent>
-                      {bufferAgentOptions.map((agent) => (
-                        <SelectItem key={agent} value={agent}>
-                          {agent}
+                      {agents.map((agent) => (
+                        <SelectItem key={agent.id} value={agent.name}>
+                          {agent.name}
                         </SelectItem>
                       ))}
+                      <SelectItem key="na_buffer_ns" value="N/A">
+                        N/A
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1836,11 +2000,14 @@ export const CallResultForm = ({ submissionId, customerName, onSuccess, initialA
                       <SelectValue placeholder="Select agent (required)" />
                     </SelectTrigger>
                     <SelectContent>
-                      {agentOptions.map((agent) => (
-                        <SelectItem key={agent} value={agent}>
-                          {agent}
+                      {agents.map((agent) => (
+                        <SelectItem key={agent.id} value={agent.name}>
+                          {agent.name}
                         </SelectItem>
                       ))}
+                      <SelectItem key="na_agent_ns" value="N/A">
+                        N/A
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                   {!agentWhoTookCall && (
