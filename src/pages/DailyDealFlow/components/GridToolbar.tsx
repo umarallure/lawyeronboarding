@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -7,7 +8,9 @@ import { format } from "date-fns";
 import { Search, X, Filter } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCenters } from "@/hooks/useCenters";
+import { supabase } from "@/integrations/supabase/client";
 import type { AttorneyProfile } from "@/hooks/useAttorneys";
+import { fetchLicensedCloserOptions } from "@/lib/agentOptions";
 
 interface GridToolbarProps {
   searchTerm: string;
@@ -65,18 +68,21 @@ export const GridToolbar = ({
   // Special constant to represent "All" selections (cannot use empty string with Radix UI)
   const ALL_OPTION = "__ALL__";
   const { leadVendors } = useCenters();
-  // Filter options (these should match your database values)
-  const licensedAgentOptions = [
-    "All Closers",
-    "Claudia",
-    "Lydia",
-    "Isaac",
-    "Trinity",
-    "Benjamin",
-    "Tatumn",
-    "Noah",
-    "N/A"
-  ];
+  const [closerOptions, setCloserOptions] = useState<string[]>(["All Closers"]);
+
+  useEffect(() => {
+    const fetchClosers = async () => {
+      try {
+        const options = await fetchLicensedCloserOptions();
+        setCloserOptions(["All Closers", ...options.map((o) => o.label)]);
+      } catch (e) {
+        console.error('Error fetching closers:', e);
+        setCloserOptions(["All Closers"]);
+      }
+    };
+
+    fetchClosers();
+  }, []);
 
 
   const statusOptions = [
@@ -315,7 +321,7 @@ export const GridToolbar = ({
         {/* Licensed Agent Filter */}
         <div>
           <Label className="text-sm font-medium">
-            Licensed Agent
+            Closer
             {licensedAgentFilter && licensedAgentFilter !== ALL_OPTION && <span className="text-blue-600 ml-1">●</span>}
           </Label>
           <Select value={licensedAgentFilter || ALL_OPTION} onValueChange={onLicensedAgentFilterChange}>
@@ -323,9 +329,9 @@ export const GridToolbar = ({
               <SelectValue placeholder="All Closers" />
             </SelectTrigger>
             <SelectContent>
-              {licensedAgentOptions.map((agent) => (
-                <SelectItem key={agent} value={agent === "All Closers" ? ALL_OPTION : agent}>
-                  {agent}
+              {closerOptions.map((closer) => (
+                <SelectItem key={closer} value={closer === "All Closers" ? ALL_OPTION : closer}>
+                  {closer}
                 </SelectItem>
               ))}
             </SelectContent>

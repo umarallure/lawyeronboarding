@@ -19,6 +19,7 @@ import { logCallUpdate, getLeadInfo } from "@/lib/callLogging";
 import { AppFixTaskTypeSelector } from "@/components/AppFixTaskTypeSelector";
 import { useCenters } from "@/hooks/useCenters";
 import { useAttorneys } from "@/hooks/useAttorneys";
+import { fetchAgentDropdownOptions } from "@/lib/agentOptions";
 import type { Database } from "@/integrations/supabase/types";
 
 interface CallResultFormProps {
@@ -68,18 +69,6 @@ const productTypeOptions = [
   "N/A"
 ];
 
-const licensedAccountOptions = [
-  "Claudia",
-  "Lydia",
-  "Isaac",
-  "Abdul",
-  "Trinity",
-  "Benjamin",
-  "Tatumn",
-  "Noah",
-  "N/A"
-];
-
 const incompleteTransferReasonOptions = [
   "Call Disconnected",
   "Technical Issues",
@@ -89,35 +78,27 @@ const incompleteTransferReasonOptions = [
 ];
 
 const returnedToCenterDQReasonOptions = [
-  "Multiple Chargebacks",
   "Not Cognitively Functional",
   "Transferred Many Times Without Success",
   "TCPA",
-  "Decline All Available Carriers",
   "Already a DQ in our System",
+  "Already has Attorney Involved",
   "Other"
 ];
 
 const previouslySoldBPOReasonOptions = [
-  "Already Has Active Policy",
-  "Recently Purchased Coverage",
-  "Duplicate Lead",
+  "Already Cases Active with Us",
   "Other"
 ];
 
 const needsBPOCallbackReasonOptions = [
-  "Banking Information Invalid",
-  "Existing Policy - Draft Hasn't Passed",
   "Need Additional Information",
   "Customer Requested Callback",
   "Other"
 ];
 
 const applicationWithdrawnReasonOptions = [
-  "Customer Changed Mind",
-  "Found Better Rate",
   "No Longer Interested",
-  "Financial Concerns",
   "Other"
 ];
 
@@ -430,7 +411,7 @@ export const CallResultForm = ({ submissionId, customerName, onSuccess, initialA
   const [otherPartyAdmitFault, setOtherPartyAdmitFault] = useState<boolean | null>(null);
   const [passengersCount, setPassengersCount] = useState("");
   const [assignedAttorneyId, setAssignedAttorneyId] = useState<string>("");
-  const [agents, setAgents] = useState<Pick<Database["public"]["Tables"]["agents"]["Row"], "id" | "name">[]>([]);
+  const [agents, setAgents] = useState<Array<{ key: string; label: string }>>([]);
   const [agentsLoading, setAgentsLoading] = useState(false);
   
   const { toast } = useToast();
@@ -598,13 +579,8 @@ export const CallResultForm = ({ submissionId, customerName, onSuccess, initialA
     const fetchAgents = async () => {
       setAgentsLoading(true);
       try {
-        const { data, error } = await supabase
-          .from('agents')
-          .select('id, name')
-          .order('name', { ascending: true });
-
-        if (error) throw error;
-        setAgents((data || []) as any);
+        const options = await fetchAgentDropdownOptions();
+        setAgents(options);
       } catch (e) {
         console.error('Error fetching agents:', e);
       } finally {
@@ -1677,13 +1653,10 @@ export const CallResultForm = ({ submissionId, customerName, onSuccess, initialA
                       </SelectTrigger>
                       <SelectContent>
                         {agents.map((agent) => (
-                          <SelectItem key={agent.id} value={agent.name}>
-                            {agent.name}
+                          <SelectItem key={agent.key} value={agent.label}>
+                            {agent.label}
                           </SelectItem>
                         ))}
-                        <SelectItem key="na_agent" value="N/A">
-                          N/A
-                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1959,17 +1932,14 @@ export const CallResultForm = ({ submissionId, customerName, onSuccess, initialA
                   </Label>
                   <Select value={agentWhoTookCall} onValueChange={setAgentWhoTookCall} required>
                     <SelectTrigger className={`${!agentWhoTookCall ? 'border-red-300 focus:border-red-500' : ''}`}>
-                      <SelectValue placeholder="Select agent (required)" />
+                      <SelectValue placeholder={agentsLoading ? "Loading agents..." : "Select agent (required)"} />
                     </SelectTrigger>
                     <SelectContent>
                       {agents.map((agent) => (
-                        <SelectItem key={agent.id} value={agent.name}>
-                          {agent.name}
+                        <SelectItem key={agent.key} value={agent.label}>
+                          {agent.label}
                         </SelectItem>
                       ))}
-                      <SelectItem key="na_agent_ns" value="N/A">
-                        N/A
-                      </SelectItem>
                     </SelectContent>
                   </Select>
                   {!agentWhoTookCall && (

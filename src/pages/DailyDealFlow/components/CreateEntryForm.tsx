@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,18 +14,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { getTodayDateEST, getCurrentDateEST } from "@/lib/dateUtils";
 import { useCenters } from "@/hooks/useCenters";
 import { useAttorneys } from "@/hooks/useAttorneys";
+import { fetchLicensedCloserOptions } from "@/lib/agentOptions";
 
 interface CreateEntryFormProps {
   onSuccess: () => void;
 }
-
-const agentOptions = [
-  "Claudia", "Lydia", "Zack", "Tatumn","Angy", "Benjamin", "N/A", "Isaac"
-];
-
-const licensedAccountOptions = [
-  "Claudia", "Lydia", "Isaac", "Noah","Trinity", "Benjamin", "N/A","Tatumn"
-];
 
 const carrierOptions = [
   "Liberty", "SBLI", "Corebridge", "MOH", "Transamerica", "RNA", "AMAM",
@@ -37,14 +30,12 @@ const productTypeOptions = [
 ];
 
 const statusOptions = [
-  "Needs BPO Callback",
-  "Not Interested",
-  "Pending Approval",
-  "Returned To Center - DQ",
-  "Application Withdrawn",
-  "Call Back Fix",
   "Incomplete Transfer",
-  "DQ'd Can't be sold"
+  "Returned To Center - DQ",
+  "Previously Sold BPO",
+  "Needs BPO Callback",
+  "Application Withdrawn",
+  "Pending Information"
 ];
 
 const callResultOptions = [
@@ -53,8 +44,8 @@ const callResultOptions = [
 
 // Function to generate unique CB submission ID
 const generateCBSubmissionId = (): string => {
-  const timestamp = Date.now().toString().slice(-8); // Last 8 digits of timestamp
-  const randomDigits = Math.floor(1000 + Math.random() * 9000); // 4-digit random number
+  const timestamp = Date.now().toString().slice(-8); 
+  const randomDigits = Math.floor(1000 + Math.random() * 9000);
   return `CB${randomDigits}${timestamp}`;
 };
 
@@ -64,6 +55,24 @@ export const CreateEntryForm = ({ onSuccess }: CreateEntryFormProps) => {
   const { toast } = useToast();
   const { leadVendors } = useCenters();
   const { attorneys, loading: attorneysLoading } = useAttorneys();
+  const [closers, setClosers] = useState<Array<{ key: string; label: string }>>([]);
+  const [closersLoading, setClosersLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchClosers = async () => {
+      setClosersLoading(true);
+      try {
+        const options = await fetchLicensedCloserOptions();
+        setClosers(options);
+      } catch (e) {
+        console.error('Error fetching closers:', e);
+      } finally {
+        setClosersLoading(false);
+      }
+    };
+
+    fetchClosers();
+  }, []);
 
   // Form state - Initialize with today's date and generated submission ID
   const [formData, setFormData] = useState(() => {
@@ -78,7 +87,6 @@ export const CreateEntryForm = ({ onSuccess }: CreateEntryFormProps) => {
       client_phone_number: '',
       buffer_agent: 'N/A',
       agent: '',
-      licensed_agent_account: 'N/A',
       status: '',
       call_result: '',
       carrier: 'N/A',
@@ -130,7 +138,6 @@ export const CreateEntryForm = ({ onSuccess }: CreateEntryFormProps) => {
       client_phone_number: '',
       buffer_agent: 'N/A',
       agent: '',
-      licensed_agent_account: 'N/A',
       status: '',
       call_result: '',
       carrier: 'N/A',
@@ -364,38 +371,18 @@ export const CreateEntryForm = ({ onSuccess }: CreateEntryFormProps) => {
 
               {/* Agent */}
               <div>
-                <label className="text-sm font-medium">Agent</label>
+                <label className="text-sm font-medium">Closer</label>
                 <Select
                   value={formData.agent}
                   onValueChange={(value) => updateField('agent', value)}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select agent" />
+                    <SelectValue placeholder={closersLoading ? "Loading closers..." : "Select closer"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {agentOptions.map((agent) => (
-                      <SelectItem key={agent} value={agent}>
-                        {agent}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Licensed Agent Account */}
-              <div>
-                <label className="text-sm font-medium">Licensed Agent Account</label>
-                <Select
-                  value={formData.licensed_agent_account}
-                  onValueChange={(value) => updateField('licensed_agent_account', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {licensedAccountOptions.map((agent) => (
-                      <SelectItem key={agent} value={agent}>
-                        {agent}
+                    {closers.map((c) => (
+                      <SelectItem key={c.key} value={c.label}>
+                        {c.label}
                       </SelectItem>
                     ))}
                   </SelectContent>

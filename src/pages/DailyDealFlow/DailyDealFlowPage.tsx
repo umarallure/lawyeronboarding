@@ -339,7 +339,7 @@ const DailyDealFlowPage = () => {
         'Lead Vendor',
         'Phone Number',
         'Agent',
-        'Licensed Agent',
+        'Closer',
         'Status',
         'Call Result',
         'Carrier',
@@ -482,26 +482,6 @@ const DailyDealFlowPage = () => {
                     <div className="flex flex-col">
                       <span className="font-medium">Export Filtered Data</span>
                       <span className="text-xs text-muted-foreground">Download current view as CSV</span>
-                    </div>
-                  </DropdownMenuItem>
-                  
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="text-base font-semibold">Performance Reports</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  
-                  <DropdownMenuItem onClick={() => navigate('/buffer-performance-report')} className="cursor-pointer">
-                    <BarChart3 className="mr-2 h-4 w-4 text-blue-500" />
-                    <div className="flex flex-col">
-                      <span className="font-medium">Buffer Agent Performance</span>
-                      <span className="text-xs text-muted-foreground">View buffer agent stats & status breakdown</span>
-                    </div>
-                  </DropdownMenuItem>
-                  
-                  <DropdownMenuItem onClick={() => navigate('/licensed-agent-performance-report')} className="cursor-pointer">
-                    <UserCheck className="mr-2 h-4 w-4 text-green-500" />
-                    <div className="flex flex-col">
-                      <span className="font-medium">Licensed Agent Performance</span>
-                      <span className="text-xs text-muted-foreground">View licensed agent stats & status breakdown</span>
                     </div>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
