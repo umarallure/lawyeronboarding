@@ -168,13 +168,6 @@ const AppShell = ({
         show: !isCenterUser && !restricted,
       },
       {
-        label: 'Retainers',
-        to: '/retainers',
-        icon: <TbUserShield className="h-4 w-4 text-current" />,
-        end: true,
-        show: !isCenterUser && !restricted,
-      },
-      {
         label: 'Daily Deal Flow',
         to: '/daily-deal-flow',
         icon: <Grid3X3 className="h-4 w-4 text-current" />,
@@ -191,6 +184,13 @@ const AppShell = ({
         to: '/submission-portal',
         icon: <CheckCircle className="h-4 w-4 text-current" />,
         show: isAuthorizedUser && hasNavigationAccess && !restricted,
+      },
+      {
+        label: 'Retainers',
+        to: '/retainers',
+        icon: <TbUserShield className="h-4 w-4 text-current" />,
+        end: true,
+        show: !isCenterUser && !restricted,
       },
       /*
       {
