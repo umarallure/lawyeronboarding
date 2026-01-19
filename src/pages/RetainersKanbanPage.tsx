@@ -20,17 +20,17 @@ type RetainerStage = {
 const kanbanStages: RetainerStage[] = [
   {
     key: "paid_retainer",
-    label: "Paid retainer",
+    label: "Paid Retainer",
     columnClass: "border-green-200 bg-green-50/40",
   },
   {
     key: "non_paid_retainer",
-    label: "Non paid retainer",
+    label: "Non-Paid retainer",
     columnClass: "border-amber-200 bg-amber-50/40",
   },
   {
     key: "chargeback",
-    label: "chargeback",
+    label: "Chargeback",
     columnClass: "border-red-200 bg-red-50/40",
   },
 ];
