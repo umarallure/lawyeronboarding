@@ -69,6 +69,41 @@ const getStatusForStage = (stageKey: StageKey) => {
   return kanbanStages.find((s) => s.key === stageKey)?.label ?? "Pending Approval";
 };
 
+const stageTheme: Record<StageKey, { column: string; header: string }> = {
+  stage_1: {
+    column: "border-t-4 border-sky-500/50 bg-sky-50/50 dark:bg-sky-950/15",
+    header: "bg-sky-50/60 dark:bg-sky-950/10",
+  },
+  stage_2: {
+    column: "border-t-4 border-violet-500/50 bg-violet-50/50 dark:bg-violet-950/15",
+    header: "bg-violet-50/60 dark:bg-violet-950/10",
+  },
+  stage_3: {
+    column: "border-t-4 border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/15",
+    header: "bg-amber-50/60 dark:bg-amber-950/10",
+  },
+  stage_4: {
+    column: "border-t-4 border-cyan-500/50 bg-cyan-50/50 dark:bg-cyan-950/15",
+    header: "bg-cyan-50/60 dark:bg-cyan-950/10",
+  },
+  stage_5: {
+    column: "border-t-4 border-orange-500/50 bg-orange-50/50 dark:bg-orange-950/15",
+    header: "bg-orange-50/60 dark:bg-orange-950/10",
+  },
+  stage_6: {
+    column: "border-t-4 border-yellow-500/50 bg-yellow-50/50 dark:bg-yellow-950/15",
+    header: "bg-yellow-50/60 dark:bg-yellow-950/10",
+  },
+  stage_7: {
+    column: "border-t-4 border-emerald-500/50 bg-emerald-50/50 dark:bg-emerald-950/15",
+    header: "bg-emerald-50/60 dark:bg-emerald-950/10",
+  },
+  stage_8: {
+    column: "border-t-4 border-rose-500/50 bg-rose-50/50 dark:bg-rose-950/15",
+    header: "bg-rose-50/60 dark:bg-rose-950/10",
+  },
+};
+
 const buildAllowedStatuses = () => {
   const pendingApprovalStatus = "Pending Approval";
   const withPrefix = kanbanStages.map((s) => s.label);
@@ -693,7 +728,8 @@ const SubmissionPortalPage = () => {
                     <Card
                       key={stage.key}
                       className={
-                        "flex min-h-[560px] w-[26rem] flex-col bg-muted/20" +
+                        "flex min-h-[560px] h-full w-[26rem] flex-col bg-muted/20 " +
+                        stageTheme[stage.key].column +
                         (dragOverStage === stage.key ? " ring-2 ring-primary/30" : "")
                       }
                       onDragOver={(e) => e.preventDefault()}
@@ -708,7 +744,12 @@ const SubmissionPortalPage = () => {
                         setDragOverStage(null);
                       }}
                     >
-                      <CardHeader className="flex flex-row items-center justify-between border-b px-3 py-2">
+                      <CardHeader
+                        className={
+                          "flex flex-row items-center justify-between border-b px-3 py-2 " +
+                          stageTheme[stage.key].header
+                        }
+                      >
                         <CardTitle className="text-sm font-semibold">{getStageDisplayLabel(stage.label)}</CardTitle>
                         <Badge variant="secondary">{rows.length}</Badge>
                       </CardHeader>
@@ -745,7 +786,7 @@ const SubmissionPortalPage = () => {
                                     <div className="min-w-0">
                                       <div className="truncate text-sm font-semibold">{row.insured_name || '—'}</div>
                                       <div className="mt-0.5 text-xs text-muted-foreground">
-                                        {(row.submission_id || row.id)?.toUpperCase()} · {row.client_phone_number || '—'}
+                                        {row.client_phone_number || '—'}
                                       </div>
                                     </div>
                                     <div className="shrink-0">
@@ -758,10 +799,6 @@ const SubmissionPortalPage = () => {
                                   <div className="mt-2 flex items-center justify-between gap-2">
                                     <Badge variant="secondary" className="text-xs">{row.lead_vendor || '—'}</Badge>
                                     <div className="text-xs text-muted-foreground">{row.date || ''}</div>
-                                  </div>
-
-                                  <div className="mt-2">
-                                    <Badge variant="outline" className="text-xs">{row.status ?? '—'}</Badge>
                                   </div>
 
                                   <div className="mt-2 grid grid-cols-1 gap-1 text-xs text-muted-foreground">

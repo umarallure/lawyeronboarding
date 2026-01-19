@@ -12,7 +12,7 @@ import ReportsPage from "./pages/Reports";
 import Auth from "./pages/Auth";
 import CenterAuth from "./pages/CenterAuth";
 import Dashboard from "./pages/Dashboard";
-import Retainers from "./pages/Retainers";
+import Leads from "./pages/Leads";
 import CenterLeadPortal from "./pages/CenterLeadPortal";
 import CenterCalendarView from "./pages/CenterCalendarView";
 import CallbackRequestPage from "./pages/CallbackRequestPage";
@@ -40,6 +40,7 @@ import { AgentsPage, VendorsPage, DailyPage, CarriersPage } from "./pages/AdminA
 import NotFound from "./pages/NotFound";
 import UserManagement from "./pages/UserManagement";
 import AppShell from "@/components/layout/AppShell";
+import { Navigate } from "react-router-dom";
 
 const queryClient = new QueryClient();
 
@@ -58,8 +59,17 @@ const App = () => (
               path="/dashboard" 
               element={
                 <ProtectedRoute>
-                  <AppShell title="Retainers">
-                    <Retainers />
+                  <Navigate to="/leads" replace />
+                </ProtectedRoute>
+              } 
+            />
+
+            <Route 
+              path="/leads" 
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Leads">
+                    <Leads />
                   </AppShell>
                 </ProtectedRoute>
               } 

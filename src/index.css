@@ -106,4 +106,22 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
+
+  .app-main .container {
+    max-width: none;
+    width: 100%;
+  }
+
+  .app-main .max-w-7xl,
+  .app-main .max-w-6xl,
+  .app-main .max-w-5xl,
+  .app-main .max-w-4xl,
+  .app-main .max-w-3xl,
+  .app-main .max-w-2xl {
+    max-width: none;
+  }
+
+  .app-main .min-h-screen {
+    min-height: 100%;
+  }
 }

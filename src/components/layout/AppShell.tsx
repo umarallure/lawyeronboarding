@@ -159,8 +159,8 @@ const AppShell = ({
         show: isAuthorizedUser && hasNavigationAccess && !restricted,
       },
       {
-        label: 'Retainers',
-        to: '/dashboard',
+        label: 'Leads',
+        to: '/leads',
         icon: <Users className="h-4 w-4 text-current" />,
         end: true,
         show: !isCenterUser && !restricted,
@@ -340,7 +340,7 @@ const AppShell = ({
             </div>
           </header>
 
-          <main className="min-w-0 flex-1 overflow-y-auto">
+          <main className="app-main min-w-0 flex-1 overflow-y-auto">
             {children}
           </main>
         </div>

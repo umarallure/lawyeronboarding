@@ -24,12 +24,12 @@ const LicensedAgentProtectedRoute = ({ children }: LicensedAgentProtectedRoutePr
 
     if (!isLicensedAgent) {
       // Redirect to dashboard if not a licensed agent
-      navigate('/dashboard');
+      navigate('/leads');
       return;
     }
 
     // Licensed agents can access commission-portal and other allowed paths
-    const allowedPaths = ['/commission-portal', '/dashboard'];
+    const allowedPaths = ['/commission-portal', '/leads'];
     if (!allowedPaths.some(path => location.pathname.startsWith(path))) {
       navigate('/commission-portal', { replace: true });
     }

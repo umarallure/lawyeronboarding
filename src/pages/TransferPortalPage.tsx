@@ -3,6 +3,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -13,7 +22,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeftRight, BarChart3, Loader2, RefreshCw, TrendingUp } from "lucide-react";
+import { ArrowLeftRight, Loader2, Pencil, RefreshCw, Users } from "lucide-react";
 
 export interface TransferPortalRow {
   id: string;
@@ -77,19 +86,21 @@ const stageSlugMap: Record<string, StageKey> = {
   pendingapproval: "pending_approval",
 };
 
-const formatCurrency = (value: number) => {
-  if (!value) return "$0";
-  try {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      maximumFractionDigits: 0,
-    }).format(value);
-  } catch (error) {
-    console.error("Error formatting currency", error);
-    return `$${value}`;
-  }
-};
+const submissionPortalStages = [
+  "Information Verification",
+  "Attorney Submission",
+  "Insurance Verification",
+  "Retainer Process (Email)",
+  "Retainer Process (Postal Mail)",
+  "Retainer Signed Pending",
+  "Retainer Signed",
+  "Attorney Decision",
+] as const;
+
+const allStageOptions = [
+  ...kanbanStages.map((s) => s.label),
+  ...submissionPortalStages,
+] as const;
 
 const deriveStageKey = (row: TransferPortalRow): StageKey => {
   const source = (row.status || row.call_result || "transfer_api").toLowerCase();
@@ -115,6 +126,12 @@ const TransferPortalPage = () => {
   const itemsPerPage = 50;
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   const [selectedStage, setSelectedStage] = useState<"all" | StageKey>("all");
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editRow, setEditRow] = useState<TransferPortalRow | null>(null);
+  const [editStage, setEditStage] = useState<string>("");
+  const [editNotes, setEditNotes] = useState<string>("");
 
   // Remove duplicates based on insured_name, client_phone_number, and lead_vendor
   const removeDuplicates = (records: TransferPortalRow[]): TransferPortalRow[] => {
@@ -255,13 +272,69 @@ const TransferPortalPage = () => {
   const endIndex = startIndex + itemsPerPage;
   const currentPageData = stageFilteredData.slice(startIndex, endIndex);
 
-  const totalVolume = useMemo(() => {
-    return stageFilteredData.reduce((sum, row) => sum + (row.monthly_premium ?? 0), 0);
-  }, [stageFilteredData]);
+  const zapierTransfers = useMemo(
+    () => stageFilteredData.filter((row) => row.source_type === 'zapier').length,
+    [stageFilteredData]
+  );
 
-  const averageVolume = stageFilteredData.length
-    ? Math.round(totalVolume / stageFilteredData.length)
-    : 0;
+  const callbackTransfers = useMemo(
+    () => stageFilteredData.filter((row) => row.source_type === 'callback').length,
+    [stageFilteredData]
+  );
+
+  const handleOpenEdit = (row: TransferPortalRow) => {
+    setEditRow(row);
+    setEditStage((row.status || '').trim() || kanbanStages[0].label);
+    setEditNotes(row.notes || '');
+    setEditOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editRow) return;
+
+    const nextStage = (editStage || '').trim();
+    if (!nextStage) return;
+
+    try {
+      setEditSaving(true);
+
+      const { error } = await supabase
+        .from('daily_deal_flow')
+        .update({ status: nextStage, notes: editNotes })
+        .eq('id', editRow.id);
+
+      if (error) {
+        toast({
+          title: 'Error',
+          description: 'Failed to update transfer',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      setData((prev) =>
+        prev.map((row) =>
+          row.id === editRow.id
+            ? {
+                ...row,
+                status: nextStage,
+                notes: editNotes,
+              }
+            : row
+        )
+      );
+
+      setEditOpen(false);
+      setEditRow(null);
+
+      toast({
+        title: 'Saved',
+        description: 'Transfer updated successfully',
+      });
+    } finally {
+      setEditSaving(false);
+    }
+  };
 
   const leadsByStage = useMemo(() => {
     const grouped = new Map<StageKey, TransferPortalRow[]>();
@@ -396,23 +469,23 @@ const TransferPortalPage = () => {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Total Volume
+                  Zapier Transfers
                 </CardTitle>
               </CardHeader>
               <CardContent className="flex items-center justify-between">
-                <div className="text-3xl font-semibold">{formatCurrency(totalVolume)}</div>
-                <TrendingUp className="h-10 w-10 text-primary" />
+                <div className="text-3xl font-semibold">{zapierTransfers}</div>
+                <Users className="h-10 w-10 text-primary" />
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Avg Volume
+                  Callback Transfers
                 </CardTitle>
               </CardHeader>
               <CardContent className="flex items-center justify-between">
-                <div className="text-3xl font-semibold">{formatCurrency(averageVolume)}</div>
-                <BarChart3 className="h-10 w-10 text-primary" />
+                <div className="text-3xl font-semibold">{callbackTransfers}</div>
+                <Users className="h-10 w-10 text-primary" />
               </CardContent>
             </Card>
           </div>
@@ -548,16 +621,24 @@ const TransferPortalPage = () => {
                           </div>
                         ) : (
                           rows.map((row) => (
-                            <Card key={row.id} className="w-full" >
+                            <Card key={row.id} className="relative w-full" >
                               <CardContent className="p-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  className="absolute right-2 top-2 h-7 w-7"
+                                  onClick={() => handleOpenEdit(row)}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="min-w-0">
                                     <div className="truncate text-sm font-semibold">{row.insured_name || "Unnamed"}</div>
                                     <div className="mt-0.5 text-xs text-muted-foreground">
-                                      {(row.submission_id || row.id)?.toUpperCase()} · {row.client_phone_number || "N/A"}
+                                      {row.client_phone_number || "N/A"}
                                     </div>
                                   </div>
-                                  <div className="shrink-0 text-sm font-semibold">{formatCurrency(row.monthly_premium ?? 0)}</div>
                                 </div>
                                 <div className="mt-2 flex items-center justify-between gap-2">
                                   <Badge variant="secondary" className="text-xs">{row.lead_vendor || "Unknown"}</Badge>
@@ -590,34 +671,38 @@ const TransferPortalPage = () => {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b bg-muted/40 text-left text-xs uppercase text-muted-foreground">
-                          <th className="px-4 py-3">Transfer</th>
                           <th className="px-4 py-3">Client</th>
                           <th className="px-4 py-3">Phone</th>
                           <th className="px-4 py-3">Stage</th>
-                          <th className="px-4 py-3">Volume</th>
                           <th className="px-4 py-3">Publisher</th>
                           <th className="px-4 py-3">Date</th>
+                          <th className="px-4 py-3 text-right">Action</th>
                         </tr>
                       </thead>
                       <tbody>
                         {currentPageData.map((row) => {
                           const stageKey = deriveStageKey(row);
-                          const stageLabel = kanbanStages.find((stage) => stage.key === stageKey)?.label;
+                          const stageLabel = (row.status || '').trim() || kanbanStages.find((stage) => stage.key === stageKey)?.label;
                           return (
                             <tr key={row.id} className="border-b last:border-0">
-                              <td className="px-4 py-3 font-semibold">
-                                {row.submission_id || row.id}
-                              </td>
                               <td className="px-4 py-3">{row.insured_name || "Unnamed"}</td>
                               <td className="px-4 py-3">{row.client_phone_number || "N/A"}</td>
                               <td className="px-4 py-3">
                                 <Badge variant="outline">{stageLabel}</Badge>
                               </td>
-                              <td className="px-4 py-3 font-semibold">
-                                {formatCurrency(row.monthly_premium ?? 0)}
-                              </td>
                               <td className="px-4 py-3">{row.lead_vendor || "Unknown"}</td>
                               <td className="px-4 py-3">{row.date || ""}</td>
+                              <td className="px-4 py-3 text-right">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => handleOpenEdit(row)}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                              </td>
                             </tr>
                           );
                         })}
@@ -649,6 +734,56 @@ const TransferPortalPage = () => {
               </CardContent>
             </Card>
           )}
+
+          <Dialog
+            open={editOpen}
+            onOpenChange={(open) => {
+              setEditOpen(open);
+              if (!open) {
+                setEditRow(null);
+              }
+            }}
+          >
+            <DialogContent className="sm:max-w-[520px]">
+              <DialogHeader>
+                <DialogTitle>Edit Transfer</DialogTitle>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Stage</Label>
+                  <Select value={editStage} onValueChange={(v) => setEditStage(v)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select stage" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {allStageOptions.map((label) => (
+                          <SelectItem key={label} value={label}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Notes</Label>
+                  <Textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)} rows={5} />
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setEditOpen(false)} disabled={editSaving}>
+                  Cancel
+                </Button>
+                <Button type="button" onClick={handleSaveEdit} disabled={editSaving || !editStage}>
+                  {editSaving ? 'Saving...' : 'Save'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
     </div>

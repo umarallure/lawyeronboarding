@@ -98,9 +98,6 @@ Submission ID: ${lead.submission_id}
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2">
           Lead Information
-          <span className="text-sm font-normal text-muted-foreground">
-            #{lead.submission_id}
-          </span>
         </CardTitle>
         <Button onClick={copyToClipboard} variant="outline" size="sm">
           <Copy className="h-4 w-4 mr-2" />

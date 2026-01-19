@@ -65,17 +65,31 @@ const productTypeOptions = [
   "Preferred", "Standard", "Graded", "Modified", "GI", "Immediate", "Level", "ROP", "N/A"
 ];
 
-const statusOptions = [
-  "Needs BPO Callback",
-  "Not Interested",
-  "Pending Approval",
-  "Previously Sold BPO",
-  "Returned To Center - DQ",
-  "Application Withdrawn",
-  "Call Back Fix",
-  "Incomplete Transfer",
-  "DQ'd Can't be sold"
+const submissionPortalStageOptions = [
+  "Information Verification",
+  "Attorney Submission",
+  "Insurance Verification",
+  "Retainer Process (Email)",
+  "Retainer Process (Postal Mail)",
+  "Retainer Signed Pending",
+  "Retainer Signed",
+  "Attorney Decision",
 ];
+
+const statusOptions = Array.from(
+  new Set([
+    "Needs BPO Callback",
+    "Not Interested",
+    "Pending Approval",
+    "Previously Sold BPO",
+    "Returned To Center - DQ",
+    "Application Withdrawn",
+    "Call Back Fix",
+    "Incomplete Transfer",
+    "DQ'd Can't be sold",
+    ...submissionPortalStageOptions
+  ])
+);
 
 const callResultOptions = [
   "Submitted", "Underwriting", "Not Submitted"

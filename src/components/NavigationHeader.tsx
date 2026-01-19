@@ -160,9 +160,9 @@ export const NavigationHeader = ({ title, showBackButton = false, backTo }: Navi
                     </DropdownMenuItem>
                     
       
-                    <DropdownMenuItem onClick={() => navigate('/dashboard')}>
+                    <DropdownMenuItem onClick={() => navigate('/leads')}>
                       <User className="mr-2 h-4 w-4" />
-                      Retainers
+                      Leads
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                   </>
@@ -196,9 +196,9 @@ export const NavigationHeader = ({ title, showBackButton = false, backTo }: Navi
                       <Inbox className="mr-2 h-4 w-4" />
                       My Created Tasks
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate('/dashboard')}>
+                    <DropdownMenuItem onClick={() => navigate('/leads')}>
                       <Grid3X3 className="mr-2 h-4 w-4" />
-                      Retainers
+                      Leads
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                   </>
@@ -228,9 +228,9 @@ export const NavigationHeader = ({ title, showBackButton = false, backTo }: Navi
                       <Zap className="mr-2 h-4 w-4" />
                       GHL Sync Portal
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate('/dashboard')}>
+                    <DropdownMenuItem onClick={() => navigate('/leads')}>
                       <User className="mr-2 h-4 w-4" />
-                      Retainers
+                      Leads
                     </DropdownMenuItem>
                   </>
                 )}

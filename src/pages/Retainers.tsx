@@ -138,42 +138,12 @@ const Retainers = () => {
 
   const fetchLeads = async (searchTerm?: string) => {
     try {
-      const pendingApprovalStatus = 'Pending Approval';
-
-      const { data: pendingTransfers, error: pendingTransfersError } = await supabase
-        .from('daily_deal_flow')
-        .select('submission_id')
-        .eq('status', pendingApprovalStatus)
-        .limit(5000);
-
-      if (pendingTransfersError) throw pendingTransfersError;
-
-      const pendingSubmissionIds = (pendingTransfers || [])
-        .map((r: any) => r.submission_id)
-        .filter(Boolean);
-
-      if (pendingSubmissionIds.length === 0) {
-        setLeads([]);
-        return;
-      }
-
       // Query only the leads table (no joins)
       let query = supabase
         .from('leads')
         .select(`*`, { count: 'exact' })
-        .in('submission_id', pendingSubmissionIds)
-        .order('created_at', { ascending: false });
-
-      // If searching, apply server-side search on common lead fields
-      if (searchTerm && searchTerm.trim()) {
-        const searchValue = `%${searchTerm.trim()}%`;
-        query = query.or(`customer_full_name.ilike.${searchValue},submission_id.ilike.${searchValue},phone_number.ilike.${searchValue},email.ilike.${searchValue}`);
-        // Limit search results to 1000 for better performance
-        query = query.limit(1000);
-      } else {
-        // For non-search loads, limit to recent 2000 records for faster loading
-        query = query.limit(2000);
-      }
+        .order('created_at', { ascending: false })
+        .range(0, 9999);
 
       const { data: leadsData, error: leadsError } = await query;
 
@@ -212,35 +182,7 @@ const Retainers = () => {
   // No analytics-related functions
 
   const applyFilters = () => {
-    let filtered = leads;
-
-    if (dateFilter) {
-      filtered = filtered.filter(lead =>
-        lead.created_at && lead.created_at.includes(dateFilter)
-      );
-    }
-
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(lead => {
-        if (!lead.call_results || lead.call_results.length === 0) {
-          return statusFilter === 'no-result';
-        }
-
-        const latestResult = lead.call_results[0];
-        const isSubmitted = Boolean(latestResult.application_submitted);
-
-        if (statusFilter === 'submitted') {
-          return isSubmitted;
-        } else if (statusFilter === 'not-submitted') {
-          return !isSubmitted;
-        } else if (statusFilter === 'no-result') {
-          return false; // Already handled above
-        }
-        return true;
-      });
-    }
-
-    setFilteredLeads(filtered);
+    setFilteredLeads(leads);
   };  const getLeadStatus = (lead: LeadWithCallResult) => {
     if (!lead.call_results || lead.call_results.length === 0) return 'No Result';
     const latestResult = lead.call_results[0];
