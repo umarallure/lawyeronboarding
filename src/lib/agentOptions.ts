@@ -77,44 +77,21 @@ export const fetchAgentDropdownOptions = async (): Promise<Array<{ key: string; 
 };
 
 export const fetchLicensedCloserOptions = async (): Promise<Array<{ key: string; label: string }>> => {
-  const { data: agentStatus, error: agentStatusError } = await supabase
-    .from('agent_status')
-    .select('user_id')
-    .eq('agent_type', 'licensed');
+  const { data: agents, error: agentsError } = await supabase
+    .from('agents')
+    .select('id, name, email');
 
-  if (agentStatusError) {
+  if (agentsError || !agents) {
     return [];
-  }
-
-  const userIds = (agentStatus || []).map((r: any) => r.user_id).filter(Boolean);
-  if (userIds.length === 0) return [];
-
-  const appUsersRes = await safeSelectAppUsers();
-
-  const byUserId = new Map<string, { key: string; label: string }>();
-
-  if (!appUsersRes.error) {
-    (appUsersRes.data || []).forEach((u: any) => {
-      if (!u.user_id) return;
-      const label = getBestDisplayName({ name: u.name, display_name: u.display_name, email: u.email, fallback: u.user_id });
-      if (!label) return;
-      byUserId.set(String(u.user_id), { key: `app_users:${u.user_id}`, label });
-    });
   }
 
   const out: Array<{ key: string; label: string }> = [];
 
-  userIds.forEach((userId: string) => {
-    const existing = byUserId.get(String(userId));
-    if (existing) {
-      out.push(existing);
-      return;
-    }
-
-    out.push({ key: `user:${userId}`, label: String(userId) });
+  agents.forEach((agent) => {
+    const label = getBestDisplayName({ name: agent.name, email: agent.email, fallback: agent.id });
+    if (!label) return;
+    out.push({ key: `agents:${agent.id}`, label });
   });
 
-  return out
-    .filter((x) => x.label)
-    .sort((a, b) => a.label.localeCompare(b.label));
+  return out.sort((a, b) => a.label.localeCompare(b.label));
 };

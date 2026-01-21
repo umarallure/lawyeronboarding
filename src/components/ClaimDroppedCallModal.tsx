@@ -39,14 +39,14 @@ export const ClaimDroppedCallModal: React.FC<ClaimDroppedCallModalProps> = ({
             disabled
             className="border rounded px-2 py-1 w-full bg-muted text-muted-foreground"
           >
-            <option value="licensed">Licensed Agent</option>
+            <option value="licensed">Closer</option>
           </select>
         </div>
         <div className="mb-4">
-          <label className="block font-medium mb-2">Select Licensed Agent</label>
+          <label className="block font-medium mb-2">Select Closer</label>
           {fetchingAgents ? (
             <div className="flex items-center gap-2 py-2">
-              <span className="text-sm text-muted-foreground">Loading agents...</span>
+              <span className="text-sm text-muted-foreground">Loading closers...</span>
             </div>
           ) : (
             <select
@@ -54,7 +54,7 @@ export const ClaimDroppedCallModal: React.FC<ClaimDroppedCallModalProps> = ({
               onChange={e => onLicensedAgentChange(e.target.value)}
               className="border rounded px-2 py-1 w-full"
             >
-              <option value="">Select Licensed Agent</option>
+              <option value="">Select Closer</option>
               {licensedAgents.map(agent => (
                 <option key={agent.user_id} value={agent.user_id}>{agent.display_name}</option>
               ))}

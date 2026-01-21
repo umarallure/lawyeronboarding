@@ -350,22 +350,15 @@ const Retainers = () => {
   const fetchAgents = async (type: 'licensed') => {
     setFetchingAgents(true);
     try {
-      const { data: agentStatus } = await supabase
-        .from('agent_status')
-        .select('user_id')
-        .eq('agent_type', type);
-      const ids = agentStatus?.map(a => a.user_id) || [];
-      let profiles = [];
-      if (ids.length > 0) {
-        const { data } = await (supabase as any)
-          .from('app_users')
-          .select('user_id, display_name, email')
-          .in('user_id', ids);
-        profiles = (data || []).map((u: any) => ({
-          user_id: u.user_id,
-          display_name: u.display_name || (u.email ? String(u.email).split('@')[0] : '')
-        }));
-      }
+      const { data: agents } = await supabase
+        .from('agents')
+        .select('id, name, email');
+      
+      const profiles = (agents || []).map((agent: any) => ({
+        user_id: agent.id,
+        display_name: agent.name || (agent.email ? String(agent.email).split('@')[0] : agent.id)
+      }));
+      
       setLicensedAgents(profiles);
     } catch (error) {
       // Optionally handle error

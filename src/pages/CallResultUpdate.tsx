@@ -411,7 +411,7 @@ const CallResultUpdate = () => {
               </div>
             </div>
             
-            {/* <Card>
+            <Card>
               <CardHeader>
                 <CardTitle>Send Contract</CardTitle>
               </CardHeader>
@@ -433,13 +433,13 @@ const CallResultUpdate = () => {
                   <div className="text-xs text-muted-foreground">Envelope ID: {lastEnvelopeId}</div>
                 ) : null}
               </CardContent>
-            </Card> */}
+            </Card>
           </>
         ) : (
           /* Original layout when no verification panel */
           <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
             {/* Lead Details */}
-            {/* <div className="space-y-6">
+            <div className="space-y-6">
               <Card>
                 <CardHeader>
                   <CardTitle>Send Contract</CardTitle>
@@ -463,7 +463,7 @@ const CallResultUpdate = () => {
                   ) : null}
                 </CardContent>
               </Card>
-            </div> */}
+            </div>
             
             {/* Call Result Form */}
             <div>

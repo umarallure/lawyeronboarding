@@ -719,7 +719,7 @@ export const VerificationPanel = ({ sessionId, onTransferReady, onFieldVerified 
                     refetch();
                   }}
                 >
-                  Transfer to Other Licensed Agent
+                  Transfer to Other Closer
                 </Button>
               </>
             )}
