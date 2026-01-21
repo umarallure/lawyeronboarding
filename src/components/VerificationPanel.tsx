@@ -497,8 +497,8 @@ export const VerificationPanel = ({ sessionId, onTransferReady, onFieldVerified 
         {/* Footer */}
         <div className="p-4 border-t flex-shrink-0">
           <div className="flex justify-end gap-3">
-            {/* Buffer Agent Buttons */}
-            {session.buffer_agent_id && !session.licensed_agent_id && (
+            {/* Buffer Agent Buttons - Show if no licensed agent is assigned */}
+            {!session.licensed_agent_id && (
               <>
                 <Button
                   variant="destructive"
@@ -644,7 +644,7 @@ export const VerificationPanel = ({ sessionId, onTransferReady, onFieldVerified 
                 </Button>
               </>
             )}
-            {/* Licensed Agent Buttons */}
+            {/* Licensed Agent Buttons - Show if licensed agent is assigned */}
             {session.licensed_agent_id && (
               <>
                 <Button

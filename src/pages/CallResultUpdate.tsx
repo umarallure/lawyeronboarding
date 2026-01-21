@@ -184,19 +184,30 @@ const CallResultUpdate = () => {
 
   const checkExistingVerificationSession = async () => {
     try {
-      const { data: session, error } = await supabase
+      const { data: sessions, error } = await supabase
         .from('verification_sessions')
-        .select('id, status')
+        .select('id, status, buffer_agent_id, licensed_agent_id')
         .eq('submission_id', submissionId)
-        .in('status', ['pending', 'in_progress', 'ready_for_transfer', 'transferred', 'completed'])
-        .single();
+        .order('created_at', { ascending: false });
 
-      if (session && !error) {
-        setVerificationSessionId(session.id);
+      console.log('Verification sessions found:', sessions);
+
+      if (error) {
+        console.error('Error fetching verification sessions:', error);
+        return;
+      }
+
+      // Get the most recent session (first in the ordered list)
+      if (sessions && sessions.length > 0) {
+        const latestSession = sessions[0];
+        console.log('Using latest verification session:', latestSession);
+        setVerificationSessionId(latestSession.id);
         setShowVerificationPanel(true);
+      } else {
+        console.log('No verification sessions found for this submission');
       }
     } catch (error) {
-      // No existing session found, which is fine
+      console.error('Error in checkExistingVerificationSession:', error);
     }
   };
 
