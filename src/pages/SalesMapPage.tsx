@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { useAttorneys } from '@/hooks/useAttorneys';
 import { supabase } from '@/integrations/supabase/client';
 import { US_STATES } from '@/lib/us-states';
 
@@ -23,14 +27,15 @@ type TooltipState = {
   state: StateSales | null;
 };
 
-type OpenOrderCountRow = {
-  state_code: string;
-  open_orders: number;
-};
-
 type OrderRow = {
   id: string;
   target_states: string[];
+  lawyer_id?: string;
+  status?: string;
+  created_at?: string;
+  expires_at?: string;
+  quota_total?: number;
+  quota_filled?: number;
 };
 
 const MAP_PATH_SELECTOR = 'path[data-id], path[id]';
@@ -56,6 +61,28 @@ const getStatusLabel = (status: CompetitionStatus) => {
   return 'High (11+)';
 };
 
+const clampPercent = (n: number) => Math.max(0, Math.min(100, n));
+
+const getOrderProgressPercent = (order: OrderRow) => {
+  const total = Number(order.quota_total) || 0;
+  const filled = Number(order.quota_filled) || 0;
+  if (total <= 0) return 0;
+  return clampPercent((filled / total) * 100);
+};
+
+const formatShortDate = (iso?: string) => {
+  if (!iso) return null;
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: '2-digit',
+      year: 'numeric',
+    }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+};
+
 const SalesMapPage = () => {
   const [loading, setLoading] = useState(false);
   const [states, setStates] = useState<StateSales[]>([]);
@@ -64,10 +91,28 @@ const SalesMapPage = () => {
   const [mapError, setMapError] = useState<string | null>(null);
   const [dataError, setDataError] = useState<string | null>(null);
 
+  const [allOrders, setAllOrders] = useState<OrderRow[]>([]);
+  const [selectedStateCode, setSelectedStateCode] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
   const mapRootRef = useRef<HTMLDivElement | null>(null);
   const tooltipRef = useRef<HTMLDivElement | null>(null);
   const stateByCodeRef = useRef<Map<string, StateSales>>(new Map());
   const mountDoneRef = useRef(false);
+
+  const selectedStateCodeRef = useRef<string | null>(null);
+
+  const navigate = useNavigate();
+
+  const { attorneys } = useAttorneys();
+  const attorneyLabelById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const a of attorneys) {
+      const label = (a.full_name || '').trim() || (a.primary_email || '').trim() || a.user_id;
+      map.set(a.user_id, label);
+    }
+    return map;
+  }, [attorneys]);
 
   const stateByCode = useMemo(() => {
     const map = new Map<string, StateSales>();
@@ -79,7 +124,9 @@ const SalesMapPage = () => {
     stateByCodeRef.current = stateByCode;
   }, [stateByCode]);
 
-  const totalSales = useMemo(() => totalOrders, [totalOrders]);
+  useEffect(() => {
+    selectedStateCodeRef.current = selectedStateCode;
+  }, [selectedStateCode]);
 
   const mountSvg = useCallback(async () => {
     const root = mapRootRef.current;
@@ -188,17 +235,21 @@ const SalesMapPage = () => {
       const state = stateByCodeRef.current.get(code);
       const fill = state ? getStatusColor(state.status) : '#e5e7eb';
 
+      const selected = selectedStateCodeRef.current;
+      const isSelected = selected ? selected === code : false;
+      const dimOthers = Boolean(selected);
+
       // Set presentation attributes so the SVG's own styles (e.g. svg { fill: none; })
       // can't override our colors after layout/style recalculation.
       path.setAttribute('fill', fill);
-      path.setAttribute('stroke', '#0b0b0b');
-      path.setAttribute('stroke-width', '0.8');
+      path.setAttribute('stroke', isSelected ? '#111827' : '#0b0b0b');
+      path.setAttribute('stroke-width', isSelected ? '2' : '0.8');
 
       path.style.setProperty('fill', fill, 'important');
-      path.style.setProperty('stroke', '#0b0b0b', 'important');
-      path.style.setProperty('stroke-width', '0.8', 'important');
+      path.style.setProperty('stroke', isSelected ? '#111827' : '#0b0b0b', 'important');
+      path.style.setProperty('stroke-width', isSelected ? '2' : '0.8', 'important');
       path.style.cursor = state ? 'pointer' : 'default';
-      path.style.opacity = '1';
+      path.style.opacity = dimOthers && !isSelected ? '0.55' : '1';
     });
 
     applyStateLabels();
@@ -226,7 +277,7 @@ const SalesMapPage = () => {
 
       const { data, error } = await supabaseUntyped
         .from('orders')
-        .select('id,target_states')
+        .select('id,target_states,lawyer_id,status,created_at,expires_at,quota_total,quota_filled')
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -234,6 +285,7 @@ const SalesMapPage = () => {
       }
 
       const rows = (data ?? []) as OrderRow[];
+      setAllOrders(rows);
       setTotalOrders(rows.length);
 
       const counts = new Map<string, number>();
@@ -261,6 +313,7 @@ const SalesMapPage = () => {
       const msg = e instanceof Error ? e.message : String(e);
       setDataError(msg);
       setTotalOrders(0);
+      setAllOrders([]);
       setStates(
         US_STATES.map((s) => ({
           code: s.code,
@@ -290,6 +343,11 @@ const SalesMapPage = () => {
     if (states.length === 0) return;
     applyMapColors();
   }, [applyMapColors, states]);
+
+  useEffect(() => {
+    if (states.length === 0) return;
+    applyMapColors();
+  }, [applyMapColors, selectedStateCode, states.length]);
 
   useEffect(() => {
     const root = mapRootRef.current;
@@ -334,10 +392,24 @@ const SalesMapPage = () => {
       });
     };
 
+    const handleStateClick = (evt: Event) => {
+      const target = evt.target as HTMLElement | null;
+      if (!target) return;
+      const code = (target.getAttribute('data-id') || target.getAttribute('id') || '').trim().toUpperCase();
+      if (!code) return;
+
+      const state = stateByCode.get(code) ?? null;
+      if (!state) return;
+
+      setSelectedStateCode(code);
+      setDrawerOpen(true);
+    };
+
     const paths = svg.querySelectorAll(MAP_PATH_SELECTOR);
     paths.forEach((p) => {
       p.addEventListener('mouseenter', handleStateEnter);
       p.addEventListener('mouseleave', handleStateLeave);
+      p.addEventListener('click', handleStateClick);
     });
     svg.addEventListener('mousemove', handleMouseMove);
 
@@ -345,10 +417,22 @@ const SalesMapPage = () => {
       paths.forEach((p) => {
         p.removeEventListener('mouseenter', handleStateEnter);
         p.removeEventListener('mouseleave', handleStateLeave);
+        p.removeEventListener('click', handleStateClick);
       });
       svg.removeEventListener('mousemove', handleMouseMove);
     };
   }, [stateByCode]);
+
+  const selectedState = useMemo(() => {
+    if (!selectedStateCode) return null;
+    return stateByCode.get(selectedStateCode) ?? null;
+  }, [selectedStateCode, stateByCode]);
+
+  const selectedStateOrders = useMemo(() => {
+    if (!selectedStateCode) return [];
+    const code = selectedStateCode;
+    return allOrders.filter((o) => Array.isArray(o.target_states) && o.target_states.map(String).map((s) => s.toUpperCase()).includes(code));
+  }, [allOrders, selectedStateCode]);
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-6">
@@ -476,6 +560,94 @@ const SalesMapPage = () => {
           </div>
         </CardContent>
       </Card>
+
+      <Sheet
+        open={drawerOpen}
+        onOpenChange={(open) => {
+          setDrawerOpen(open);
+          if (!open) {
+            setSelectedStateCode(null);
+          }
+        }}
+      >
+        <SheetContent side="right" className="w-full sm:max-w-md">
+          <SheetHeader className="text-left">
+            <SheetTitle>
+              {selectedState ? `Orders in ${selectedState.name} (${selectedState.code})` : 'Orders'}
+            </SheetTitle>
+          </SheetHeader>
+
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <Badge variant="secondary">{selectedStateOrders.length} orders</Badge>
+            {loading ? (
+              <div className="text-xs text-muted-foreground">Loading…</div>
+            ) : null}
+          </div>
+
+          <div className="mt-4 space-y-2 overflow-auto pr-1" style={{ maxHeight: 'calc(100vh - 180px)' }}>
+            {!selectedStateCode ? (
+              <div className="rounded-md border bg-background px-3 py-2 text-sm text-muted-foreground">
+                Select a state to view orders.
+              </div>
+            ) : selectedStateOrders.length === 0 ? (
+              <div className="rounded-md border bg-background px-3 py-2 text-sm text-muted-foreground">
+                No submitted orders in this state.
+              </div>
+            ) : (
+              selectedStateOrders.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  className="w-full rounded-lg border bg-background px-3 py-3 text-left transition hover:bg-muted"
+                  onClick={() => {
+                    const base = `/order-fulfillment/${encodeURIComponent(o.id)}/fulfill`;
+                    const lawyerId = (o.lawyer_id || '').trim();
+                    const url = lawyerId ? `${base}?lawyerId=${encodeURIComponent(lawyerId)}` : base;
+                    navigate(url);
+                  }}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate font-medium">
+                        {o.lawyer_id ? attorneyLabelById.get(o.lawyer_id) || o.lawyer_id : 'Unassigned attorney'}
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {(o.status || 'OPEN').toString()}
+                        {o.created_at ? ` • ${new Date(o.created_at).toLocaleDateString('en-US')}` : ''}
+                      </div>
+
+                      <div className="mt-3 space-y-1">
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <span>Progress</span>
+                          <span>{Math.round(getOrderProgressPercent(o))}%</span>
+                        </div>
+                        <Progress value={getOrderProgressPercent(o)} />
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                        <div className="rounded-md border bg-background px-2 py-1">
+                          <div className="text-muted-foreground">Quota</div>
+                          <div className="font-medium">
+                            {Number(o.quota_filled) || 0}/{Number(o.quota_total) || 0}
+                          </div>
+                        </div>
+                        <div className="rounded-md border bg-background px-2 py-1">
+                          <div className="text-muted-foreground">Expires</div>
+                          <div className="font-medium">{formatShortDate(o.expires_at) ?? '—'}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="shrink-0">
+                      <Badge variant="outline">Fulfill</Badge>
+                    </div>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 };
