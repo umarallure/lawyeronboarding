@@ -30,6 +30,7 @@ import BulkLookupPage from "./pages/BulkLookupPage";
 import GHLSyncPage from "./pages/GHLSyncPage/GHLSyncPage";
 import SalesMapPage from "./pages/SalesMapPage";
 import OrderFulfillmentPage from "./pages/OrderFulfillmentPage";
+import OrderFulfillmentAssignPage from "./pages/OrderFulfillmentAssignPage";
 import DealFlowLookup from "./pages/DealFlowLookup";
 import AgentLicensing from "./pages/AgentLicensing";
 import { AgentEligibilityPage } from "./pages/AgentEligibilityPage";
@@ -94,6 +95,17 @@ const App = () => (
                 <ProtectedRoute>
                   <AppShell title="Order Fulfillment">
                     <OrderFulfillmentPage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/order-fulfillment/:orderId/fulfill"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Fulfill Order">
+                    <OrderFulfillmentAssignPage />
                   </AppShell>
                 </ProtectedRoute>
               }

@@ -40,6 +40,13 @@ type RecommendResponse = {
   error?: string;
 };
 
+type SupabaseRpcUntyped = {
+  rpc: (
+    fn: string,
+    args: Record<string, unknown>
+  ) => Promise<{ data: unknown; error: { message?: string } | null }>;
+};
+
 const formatExpiry = (iso: string) => {
   try {
     const expiresAt = new Date(iso).getTime();
@@ -104,7 +111,8 @@ export const OrderRecommendationsCard = (props: {
         return null;
       }
 
-      const next = (leadRow as any)?.id ? String((leadRow as any).id) : null;
+      const typedLeadRow = leadRow as Record<string, unknown> | null;
+      const next = typedLeadRow?.id ? String(typedLeadRow.id) : null;
       setResolvedLeadId(next);
       return next;
     } finally {
@@ -159,6 +167,28 @@ export const OrderRecommendationsCard = (props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [payload]);
 
+  const ensureDealExists = async () => {
+    if (!props.submissionId) return false;
+
+    const { data: dealRow, error: dealError } = await supabase
+      .from("daily_deal_flow")
+      .select("id")
+      .eq("submission_id", props.submissionId)
+      .maybeSingle();
+
+    if (dealError || !dealRow) {
+      toast({
+        title: "Cannot assign yet",
+        description:
+          "This submission is not in Daily Deal Flow. Create a deal (Daily Deal Flow entry) first, then assign it to an order.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    return true;
+  };
+
   const assign = async (rec: Recommendation) => {
     if (!user?.id) {
       toast({
@@ -168,6 +198,9 @@ export const OrderRecommendationsCard = (props: {
       });
       return;
     }
+
+    const hasDeal = await ensureDealExists();
+    if (!hasDeal) return;
 
     const leadId = await fetchLeadIdIfNeeded();
     if (!leadId) {
@@ -181,7 +214,8 @@ export const OrderRecommendationsCard = (props: {
 
     setAssigningOrderId(rec.order_id);
     try {
-      const { data: rpcData, error: rpcError } = await supabase.rpc("assign_lead_to_order", {
+      const supabaseRpc = supabase as unknown as SupabaseRpcUntyped;
+      const { error: rpcError } = await supabaseRpc.rpc("assign_lead_to_order", {
         p_order_id: rec.order_id,
         p_lead_id: leadId,
         p_agent_id: user.id,
@@ -199,7 +233,7 @@ export const OrderRecommendationsCard = (props: {
 
       toast({
         title: "Assigned",
-        description: `Lead assigned to order ${rec.order_id}`,
+        description: `Lead assigned to ${attorneyById.get(rec.lawyer_id) || rec.lawyer_id}`,
       });
 
       props.onAssigned?.({ orderId: rec.order_id, lawyerId: rec.lawyer_id });

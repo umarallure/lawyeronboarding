@@ -22,6 +22,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
+import { useAttorneys } from '@/hooks/useAttorneys';
+import { useNavigate } from 'react-router-dom';
 
 type OrderStatus = 'OPEN' | 'FULFILLED' | 'EXPIRED';
 
@@ -77,6 +79,17 @@ const OrderFulfillmentPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [orders, setOrders] = useState<OrderRow[]>([]);
 
+  const navigate = useNavigate();
+  const { attorneys } = useAttorneys();
+  const attorneyLabelById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const a of attorneys) {
+      const label = (a.full_name || '').trim() || (a.primary_email || '').trim() || a.user_id;
+      map.set(a.user_id, label);
+    }
+    return map;
+  }, [attorneys]);
+
   const [query, setQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<'all' | OrderStatus>('all');
 
@@ -129,18 +142,17 @@ const OrderFulfillmentPage = () => {
       if (selectedStatus !== 'all' && o.status !== selectedStatus) return false;
 
       if (!q) return true;
+      const lawyerLabel = attorneyLabelById.get(o.lawyer_id) || o.lawyer_id;
       const haystack = [
         o.id,
-        o.lawyer_id,
-        o.case_type,
-        o.case_subtype ?? '',
+        lawyerLabel,
         (o.target_states ?? []).join(','),
       ]
         .join(' ')
         .toLowerCase();
       return haystack.includes(q);
     });
-  }, [orders, query, selectedStatus]);
+  }, [orders, query, selectedStatus, attorneyLabelById]);
 
   const stats = useMemo(() => {
     const total = orders.length;
@@ -225,7 +237,7 @@ const OrderFulfillmentPage = () => {
                 <Input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search by order id, lawyer id, case type, state..."
+                  placeholder="Search by order id, lawyer name, lawyer id, state..."
                   className="pl-9"
                 />
               </div>
@@ -258,13 +270,14 @@ const OrderFulfillmentPage = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Case Type</TableHead>
+                <TableHead>Lawyer</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Target States</TableHead>
                 <TableHead>Filled</TableHead>
                 <TableHead>Progress</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead>Expires</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -272,15 +285,13 @@ const OrderFulfillmentPage = () => {
                 const pct = getOrderPercent(o);
                 const filled = Number(o.quota_filled) || 0;
                 const total = Number(o.quota_total) || 0;
+                const lawyerLabel = attorneyLabelById.get(o.lawyer_id) || o.lawyer_id;
 
                 return (
                   <TableRow key={o.id}>
                     <TableCell>
                       <div className="space-y-0.5">
-                        <div className="font-medium">{o.case_type}</div>
-                        {o.case_subtype ? (
-                          <div className="text-xs text-muted-foreground">{o.case_subtype}</div>
-                        ) : null}
+                        <div className="font-medium">{lawyerLabel}</div>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -314,6 +325,15 @@ const OrderFulfillmentPage = () => {
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{formatDate(o.created_at)}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{formatDate(o.expires_at)}</TableCell>
+                    <TableCell>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigate(`/order-fulfillment/${o.id}/fulfill?lawyerId=${encodeURIComponent(o.lawyer_id)}`)}
+                      >
+                        Fulfill
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 );
               })}
