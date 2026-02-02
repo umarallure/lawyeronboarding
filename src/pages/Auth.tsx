@@ -106,7 +106,10 @@ const Auth = () => {
       {/* NOTE: We keep specific colors (indigo/sky/purple) for the decorative blobs 
          to maintain the artistic mesh look, even if the theme changes. 
       */}
-      <div className="absolute inset-0 w-full h-full bg-background">
+      <div
+        className="absolute inset-0 w-full h-full bg-background bg-cover bg-center"
+        style={{ backgroundImage: "url('/assets/White-BG.png')" }}
+      >
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-primary/20 blur-[120px] animate-pulse" style={{ animationDuration: '4s' }} />
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-sky-500/20 blur-[120px] animate-pulse" style={{ animationDuration: '6s' }} />
         <div className="absolute top-[20%] right-[20%] w-[30%] h-[30%] rounded-full bg-purple-500/10 blur-[100px]" />
