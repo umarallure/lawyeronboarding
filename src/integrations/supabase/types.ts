@@ -746,6 +746,45 @@ export type Database = {
         }
         Relationships: []
       }
+      portal_stages: {
+        Row: {
+          id: string
+          pipeline: string
+          key: string
+          label: string
+          display_order: number
+          column_class: string | null
+          header_class: string | null
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          pipeline: string
+          key: string
+          label: string
+          display_order?: number
+          column_class?: string | null
+          header_class?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          pipeline?: string
+          key?: string
+          label?: string
+          display_order?: number
+          column_class?: string | null
+          header_class?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           agent_code: string | null

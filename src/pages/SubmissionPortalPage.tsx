@@ -25,128 +25,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Loader2, RefreshCw, Pencil, StickyNote } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAttorneys } from "@/hooks/useAttorneys";
-
-const kanbanStages = [
-  { key: "stage_9", label: "Pending Signature" },
-  { key: "stage_10", label: "Pending Police Report" },
-  { key: "stage_11", label: "Signed & Police Report Pending" },
-  { key: "stage_1", label: "Information Verification" },
-  { key: "stage_2", label: "Attorney Submission" },
-  { key: "stage_3", label: "Insurance Verification" },
-  { key: "stage_4", label: "Retainer Process (Email)" },
-  { key: "stage_5", label: "Retainer Process (Postal Mail)" },
-  { key: "stage_6", label: "Retainer Signed Pending" },
-  { key: "stage_7", label: "Retainer Signed" },
-  { key: "stage_8", label: "Attorney Decision" },
-  { key: "stage_12", label: "Retainer Signed – Payable" },
-  { key: "stage_13", label: "Retainer Paid" },
-] as const;
-
-type StageKey = (typeof kanbanStages)[number]["key"];
-
-const stageSlugMap: Record<string, StageKey> = {
-  stage_1_information_verification: "stage_1",
-  stage_2_attorney_submission: "stage_2",
-  stage_3_insurance_verification: "stage_3",
-  stage_4_retainer_process_email: "stage_4",
-  stage_5_retainer_process_postal_mail: "stage_5",
-  stage_6_retainer_signed_pending: "stage_6",
-  stage_7_retainer_signed: "stage_7",
-  stage_8_attorney_decision: "stage_8",
-  stage_9_pending_signature: "stage_9",
-  stage_10_pending_police_report: "stage_10",
-  stage_11_signed_police_report_pending: "stage_11",
-  stage_12_retainer_signed_payable: "stage_12",
-  stage_13_retainer_paid: "stage_13",
-  information_verification: "stage_1",
-  attorney_submission: "stage_2",
-  insurance_verification: "stage_3",
-  retainer_process_email: "stage_4",
-  retainer_process_postal_mail: "stage_5",
-  retainer_signed_pending: "stage_6",
-  retainer_signed: "stage_7",
-  attorney_decision: "stage_8",
-  pending_signature: "stage_9",
-  pending_police_report: "stage_10",
-  signed_police_report_pending: "stage_11",
-  retainer_signed_payable: "stage_12",
-  retainer_paid: "stage_13",
-};
-
-const deriveStageKey = (row: SubmissionPortalRow): StageKey => {
-  const status = (row.status || '').trim();
-  if (!status || status === 'Pending Approval') return 'stage_1';
-
-  const exact = kanbanStages.find((s) => s.label === status);
-  return exact?.key ?? 'stage_1';
-};
-
-const getStatusForStage = (stageKey: StageKey) => {
-  if (stageKey === "stage_1") return "Pending Approval";
-  return kanbanStages.find((s) => s.key === stageKey)?.label ?? "Pending Approval";
-};
-
-const stageTheme: Record<StageKey, { column: string; header: string }> = {
-  stage_1: {
-    column: "border-t-4 border-sky-500/50 bg-sky-50/50 dark:bg-sky-950/15",
-    header: "bg-sky-50/60 dark:bg-sky-950/10",
-  },
-  stage_2: {
-    column: "border-t-4 border-violet-500/50 bg-violet-50/50 dark:bg-violet-950/15",
-    header: "bg-violet-50/60 dark:bg-violet-950/10",
-  },
-  stage_3: {
-    column: "border-t-4 border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/15",
-    header: "bg-amber-50/60 dark:bg-amber-950/10",
-  },
-  stage_4: {
-    column: "border-t-4 border-cyan-500/50 bg-cyan-50/50 dark:bg-cyan-950/15",
-    header: "bg-cyan-50/60 dark:bg-cyan-950/10",
-  },
-  stage_5: {
-    column: "border-t-4 border-orange-500/50 bg-orange-50/50 dark:bg-orange-950/15",
-    header: "bg-orange-50/60 dark:bg-orange-950/10",
-  },
-  stage_6: {
-    column: "border-t-4 border-yellow-500/50 bg-yellow-50/50 dark:bg-yellow-950/15",
-    header: "bg-yellow-50/60 dark:bg-yellow-950/10",
-  },
-  stage_7: {
-    column: "border-t-4 border-emerald-500/50 bg-emerald-50/50 dark:bg-emerald-950/15",
-    header: "bg-emerald-50/60 dark:bg-emerald-950/10",
-  },
-  stage_8: {
-    column: "border-t-4 border-rose-500/50 bg-rose-50/50 dark:bg-rose-950/15",
-    header: "bg-rose-50/60 dark:bg-rose-950/10",
-  },
-  stage_9: {
-    column: "border-t-4 border-slate-500/50 bg-slate-50/50 dark:bg-slate-950/15",
-    header: "bg-slate-50/60 dark:bg-slate-950/10",
-  },
-  stage_10: {
-    column: "border-t-4 border-lime-500/50 bg-lime-50/50 dark:bg-lime-950/15",
-    header: "bg-lime-50/60 dark:bg-lime-950/10",
-  },
-  stage_11: {
-    column: "border-t-4 border-indigo-500/50 bg-indigo-50/50 dark:bg-indigo-950/15",
-    header: "bg-indigo-50/60 dark:bg-indigo-950/10",
-  },
-  stage_12: {
-    column: "border-t-4 border-teal-500/50 bg-teal-50/50 dark:bg-teal-950/15",
-    header: "bg-teal-50/60 dark:bg-teal-950/10",
-  },
-  stage_13: {
-    column: "border-t-4 border-fuchsia-500/50 bg-fuchsia-50/50 dark:bg-fuchsia-950/15",
-    header: "bg-fuchsia-50/60 dark:bg-fuchsia-950/10",
-  },
-};
-
-const buildAllowedStatuses = () => {
-  const pendingApprovalStatus = "Pending Approval";
-  const withPrefix = kanbanStages.map((s) => s.label);
-  const withoutPrefix = kanbanStages.map((s) => s.label.replace(/^Stage\s+\d+\s*:\s*/i, ""));
-  return Array.from(new Set([pendingApprovalStatus, ...withPrefix, ...withoutPrefix]));
-};
+import { usePipelineStages, type PipelineStage } from "@/hooks/usePipelineStages";
 
 export interface SubmissionPortalRow {
   id: string;
@@ -194,6 +73,43 @@ interface CallLog {
 
 const SubmissionPortalPage = () => {
   const navigate = useNavigate();
+
+  // --- Dynamic pipeline stages from DB ---
+  const { stages: dbSubmissionStages, loading: stagesLoading } = usePipelineStages("submission_portal");
+
+  const kanbanStages = useMemo(() => {
+    return dbSubmissionStages.map((s) => ({ key: s.key, label: s.label }));
+  }, [dbSubmissionStages]);
+
+  const stageTheme = useMemo(() => {
+    const theme: Record<string, { column: string; header: string }> = {};
+    dbSubmissionStages.forEach((s) => {
+      theme[s.key] = { column: s.column_class || "", header: s.header_class || "" };
+    });
+    return theme;
+  }, [dbSubmissionStages]);
+
+  const deriveStageKey = (row: SubmissionPortalRow): string => {
+    const status = (row.status || '').trim();
+    if (!status || status === 'Pending Approval') return kanbanStages.find((s) => s.label === 'Information Verification')?.key ?? 'information_verification';
+    const exact = kanbanStages.find((s) => s.label === status);
+    return exact?.key ?? kanbanStages[0]?.key ?? 'pending_signature';
+  };
+
+  const getStatusForStage = (stageKey: string) => {
+    const found = kanbanStages.find((s) => s.key === stageKey);
+    if (!found) return "Pending Approval";
+    if (found.label === "Information Verification") return "Pending Approval";
+    return found.label;
+  };
+
+  const buildAllowedStatuses = () => {
+    const pendingApprovalStatus = "Pending Approval";
+    const withPrefix = kanbanStages.map((s) => s.label);
+    const withoutPrefix = kanbanStages.map((s) => s.label.replace(/^Stage\s+\d+\s*:\s*/i, ""));
+    return Array.from(new Set([pendingApprovalStatus, ...withPrefix, ...withoutPrefix]));
+  };
+
   const [data, setData] = useState<SubmissionPortalRow[]>([]);
   const [filteredData, setFilteredData] = useState<SubmissionPortalRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -205,7 +121,7 @@ const SubmissionPortalPage = () => {
   const [showDuplicates, setShowDuplicates] = useState(true);
   const [dataCompletenessFilter, setDataCompletenessFilter] = useState("__ALL__");
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [dragOverStage, setDragOverStage] = useState<StageKey | null>(null);
+  const [dragOverStage, setDragOverStage] = useState<string | null>(null);
   const [columnPage, setColumnPage] = useState<Record<string, number>>({});
   const [noteCounts, setNoteCounts] = useState<Record<string, number>>({});
 
@@ -621,8 +537,9 @@ const SubmissionPortalPage = () => {
   }, [data, dateFilter, statusFilter, leadVendorFilter, showDuplicates, searchTerm, dataCompletenessFilter]);
 
   useEffect(() => {
+    if (stagesLoading) return;
     fetchData();
-  }, [dateFilter]);
+  }, [dateFilter, stagesLoading]);
 
   const handleRefresh = () => {
     fetchData(true);
@@ -721,7 +638,7 @@ const SubmissionPortalPage = () => {
     setNoteCounts(counts);
   };
 
-  const handleDropToStage = async (rowId: string, stageKey: StageKey) => {
+  const handleDropToStage = async (rowId: string, stageKey: string) => {
     const nextStatus = getStatusForStage(stageKey);
 
     const prev = data;
@@ -761,14 +678,14 @@ const SubmissionPortalPage = () => {
   };
 
   const leadsByStage = useMemo(() => {
-    const grouped = new Map<StageKey, SubmissionPortalRow[]>();
+    const grouped = new Map<string, SubmissionPortalRow[]>();
     kanbanStages.forEach((stage) => grouped.set(stage.key, []));
     filteredData.forEach((row) => {
       const stageKey = deriveStageKey(row);
       grouped.get(stageKey)?.push(row);
     });
     return grouped;
-  }, [filteredData]);
+  }, [filteredData, kanbanStages]);
 
   useEffect(() => {
     setColumnPage((prev) => {

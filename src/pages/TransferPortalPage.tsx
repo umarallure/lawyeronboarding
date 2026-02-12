@@ -24,6 +24,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeftRight, Loader2, Pencil, RefreshCw, Users, StickyNote } from "lucide-react";
+import { usePipelineStages, type PipelineStage } from "@/hooks/usePipelineStages";
 
 export interface TransferPortalRow {
   id: string;
@@ -53,78 +54,39 @@ export interface TransferPortalRow {
   source_type?: string;
 }
 
-const kanbanStages = [
-  { key: "transfer_api", label: "Transfer API" },
-  { key: "incomplete_transfer", label: "Incomplete Transfer" },
-  { key: "returned_to_center_dq", label: "Returned To Center - DQ" },
-  { key: "previously_sold_bpo", label: "Previously Sold BPO" },
-  { key: "needs_bpo_callback", label: "Needs BPO Callback" },
-  { key: "application_withdrawn", label: "Application Withdrawn" },
-  { key: "pending_information", label: "Pending Information" },
-  { key: "pending_approval", label: "Pending Approval" },
-] as const;
-
-type StageKey = (typeof kanbanStages)[number]["key"];
-
-const stageTheme: Record<StageKey, { column: string }> = {
-  transfer_api: { column: "border-sky-200 bg-sky-50/40" },
-  incomplete_transfer: { column: "border-amber-200 bg-amber-50/40" },
-  returned_to_center_dq: { column: "border-orange-200 bg-orange-50/40" },
-  previously_sold_bpo: { column: "border-slate-200 bg-slate-50/40" },
-  needs_bpo_callback: { column: "border-yellow-200 bg-yellow-50/40" },
-  application_withdrawn: { column: "border-fuchsia-200 bg-fuchsia-50/40" },
-  pending_information: { column: "border-indigo-200 bg-indigo-50/40" },
-  pending_approval: { column: "border-emerald-200 bg-emerald-50/40" },
-};
-
-const stageSlugMap: Record<string, StageKey> = {
-  transfer_api: "transfer_api",
-  transferapi: "transfer_api",
-  incomplete_transfer: "incomplete_transfer",
-  incompletetransfer: "incomplete_transfer",
-  returned_to_center_dq: "returned_to_center_dq",
-  returned_to_center___dq: "returned_to_center_dq",
-  returned_to_center: "returned_to_center_dq",
-  previously_sold_bpo: "previously_sold_bpo",
-  previouslysoldbpo: "previously_sold_bpo",
-  needs_bpo_callback: "needs_bpo_callback",
-  needsbpocallback: "needs_bpo_callback",
-  application_withdrawn: "application_withdrawn",
-  applicationwithdrawn: "application_withdrawn",
-  pending_information: "pending_information",
-  pendinginformation: "pending_information",
-  pending_info: "pending_information",
-  pending_approval: "pending_approval",
-  pendingapproval: "pending_approval",
-};
-
-const submissionPortalStages = [
-  "Information Verification",
-  "Attorney Submission",
-  "Insurance Verification",
-  "Retainer Process (Email)",
-  "Retainer Process (Postal Mail)",
-  "Retainer Signed Pending",
-  "Retainer Signed",
-  "Attorney Decision",
-  "Pending Signature",
-  "Pending Police Report",
-  "Signed & Police Report Pending",
-] as const;
-
-const allStageOptions = [
-  ...kanbanStages.map((s) => s.label),
-  ...submissionPortalStages,
-] as const;
-
-const deriveStageKey = (row: TransferPortalRow): StageKey => {
-  const status = (row.status || '').trim();
-  const exact = kanbanStages.find((s) => s.label === status);
-  return exact?.key ?? 'transfer_api';
-};
-
 const TransferPortalPage = () => {
   const navigate = useNavigate();
+
+  // --- Dynamic pipeline stages from DB ---
+  const { stages: dbTransferStages, loading: transferStagesLoading } = usePipelineStages("transfer_portal");
+  const { stages: dbSubmissionStages, loading: submissionStagesLoading } = usePipelineStages("submission_portal");
+
+  const kanbanStages = useMemo(() => {
+    return dbTransferStages.map((s) => ({ key: s.key, label: s.label }));
+  }, [dbTransferStages]);
+
+  const stageTheme = useMemo(() => {
+    const theme: Record<string, { column: string }> = {};
+    dbTransferStages.forEach((s) => {
+      theme[s.key] = { column: s.column_class || "" };
+    });
+    return theme;
+  }, [dbTransferStages]);
+
+  const submissionPortalStageLabels = useMemo(() => {
+    return dbSubmissionStages.map((s) => s.label);
+  }, [dbSubmissionStages]);
+
+  const allStageOptions = useMemo(() => {
+    return [...kanbanStages.map((s) => s.label), ...submissionPortalStageLabels];
+  }, [kanbanStages, submissionPortalStageLabels]);
+
+  const deriveStageKey = (row: TransferPortalRow): string => {
+    const status = (row.status || '').trim();
+    const exact = kanbanStages.find((s) => s.label === status);
+    return exact?.key ?? kanbanStages[0]?.key ?? 'transfer_api';
+  };
+
   const [data, setData] = useState<TransferPortalRow[]>([]);
   const [filteredData, setFilteredData] = useState<TransferPortalRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -138,7 +100,7 @@ const TransferPortalPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 50;
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
-  const [selectedStage, setSelectedStage] = useState<"all" | StageKey>("all");
+  const [selectedStage, setSelectedStage] = useState<"all" | string>("all");
 
   const kanbanPageSize = 25;
   const [columnPage, setColumnPage] = useState<Record<string, number>>({});
@@ -262,7 +224,7 @@ const TransferPortalPage = () => {
         };
       });
 
-      const submissionStatuses = new Set<string>(['Pending Approval', ...submissionPortalStages]);
+      const submissionStatuses = new Set<string>(['Pending Approval', ...submissionPortalStageLabels]);
       const transferPortalOnlyRows = transferRows.filter((row) => {
         const status = (row.status || '').trim();
         return !submissionStatuses.has(status);
@@ -472,14 +434,14 @@ const TransferPortalPage = () => {
   };
 
   const leadsByStage = useMemo(() => {
-    const grouped = new Map<StageKey, TransferPortalRow[]>();
+    const grouped = new Map<string, TransferPortalRow[]>();
     kanbanStages.forEach((stage) => grouped.set(stage.key, []));
     stageFilteredData.forEach((row) => {
       const stageKey = deriveStageKey(row);
       grouped.get(stageKey)?.push(row);
     });
     return grouped;
-  }, [stageFilteredData]);
+  }, [stageFilteredData, kanbanStages]);
 
   useEffect(() => {
     setColumnPage((prev) => {
@@ -735,7 +697,7 @@ const TransferPortalPage = () => {
               </Select>
 
               <Select value={selectedStage} onValueChange={(value) => {
-                setSelectedStage(value as "all" | StageKey);
+                setSelectedStage(value);
                 setCurrentPage(1);
               }}>
                 <SelectTrigger className="w-44">
