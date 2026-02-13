@@ -26,6 +26,13 @@ import { Loader2, RefreshCw, Pencil, StickyNote } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAttorneys } from "@/hooks/useAttorneys";
 import { usePipelineStages, type PipelineStage } from "@/hooks/usePipelineStages";
+import {
+  parseStageLabel,
+  deriveParentStages,
+  buildStatusLabel,
+  deriveParentKey,
+  type ParentStage,
+} from "@/lib/stageUtils";
 
 export interface SubmissionPortalRow {
   id: string;
@@ -77,23 +84,34 @@ const SubmissionPortalPage = () => {
   // --- Dynamic pipeline stages from DB ---
   const { stages: dbSubmissionStages, loading: stagesLoading } = usePipelineStages("submission_portal");
 
+  // --- Derive parent stages (kanban columns) from flat DB stages ---
+  const parentStages = useMemo(() => deriveParentStages(dbSubmissionStages), [dbSubmissionStages]);
+
   const kanbanStages = useMemo(() => {
-    return dbSubmissionStages.map((s) => ({ key: s.key, label: s.label }));
-  }, [dbSubmissionStages]);
+    return parentStages.map((s) => ({ key: s.key, label: s.label }));
+  }, [parentStages]);
 
   const stageTheme = useMemo(() => {
     const theme: Record<string, { column: string; header: string }> = {};
-    dbSubmissionStages.forEach((s) => {
-      theme[s.key] = { column: s.column_class || "", header: s.header_class || "" };
+    parentStages.forEach((s) => {
+      theme[s.key] = { column: s.columnClass, header: s.headerClass };
     });
     return theme;
-  }, [dbSubmissionStages]);
+  }, [parentStages]);
+
+  // Map of parent label → reasons for edit form
+  const reasonsByParent = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    parentStages.forEach((s) => {
+      if (s.reasons.length > 0) map[s.label] = s.reasons;
+    });
+    return map;
+  }, [parentStages]);
 
   const deriveStageKey = (row: SubmissionPortalRow): string => {
     const status = (row.status || '').trim();
-    if (!status || status === 'Pending Approval') return kanbanStages.find((s) => s.label === 'Information Verification')?.key ?? 'information_verification';
-    const exact = kanbanStages.find((s) => s.label === status);
-    return exact?.key ?? kanbanStages[0]?.key ?? 'pending_signature';
+    if (!status) return parentStages[0]?.key ?? '';
+    return deriveParentKey(status, dbSubmissionStages, parentStages);
   };
 
   const handleKanbanDragOver = (e: React.DragEvent<HTMLDivElement>) => {
@@ -118,17 +136,20 @@ const SubmissionPortalPage = () => {
   };
 
   const getStatusForStage = (stageKey: string) => {
-    const found = kanbanStages.find((s) => s.key === stageKey);
-    if (!found) return "Pending Approval";
-    if (found.label === "Information Verification") return "Pending Approval";
-    return found.label;
+    const parent = parentStages.find((s) => s.key === stageKey);
+    if (!parent) return parentStages[0]?.label ?? '';
+    // If the parent has reasons, default to the first reason sub-stage
+    if (parent.reasons.length > 0) {
+      return buildStatusLabel(parent.label, parent.reasons[0]);
+    }
+    return parent.label;
   };
 
   const buildAllowedStatuses = () => {
-    const pendingApprovalStatus = "Pending Approval";
-    const withPrefix = kanbanStages.map((s) => s.label);
-    const withoutPrefix = kanbanStages.map((s) => s.label.replace(/^Stage\s+\d+\s*:\s*/i, ""));
-    return Array.from(new Set([pendingApprovalStatus, ...withPrefix, ...withoutPrefix]));
+    // Include all full DB stage labels (with reasons) + parent-only labels
+    const fullLabels = dbSubmissionStages.map((s) => s.label);
+    const parentLabels = parentStages.map((s) => s.label);
+    return Array.from(new Set([...fullLabels, ...parentLabels]));
   };
 
   const [data, setData] = useState<SubmissionPortalRow[]>([]);
@@ -150,6 +171,7 @@ const SubmissionPortalPage = () => {
   const [editSaving, setEditSaving] = useState(false);
   const [editRow, setEditRow] = useState<SubmissionPortalRow | null>(null);
   const [editStage, setEditStage] = useState("");
+  const [editReason, setEditReason] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editStageOpen, setEditStageOpen] = useState(false);
 
@@ -439,9 +461,14 @@ const SubmissionPortalPage = () => {
         
         if (submission) {
           // Merge submission data with transfer data
+          // IMPORTANT: daily_deal_flow is the authoritative source for status/notes,
+          // so we explicitly re-apply transfer.status and transfer.notes after the spread.
           return {
             ...transfer,
             ...submission,
+            // daily_deal_flow status & notes always win
+            status: transfer.status,
+            notes: transfer.notes,
             // Keep transfer data for fields that might be missing in submission
             insured_name: submission.insured_name || transfer.insured_name,
             client_phone_number: submission.client_phone_number || transfer.client_phone_number,
@@ -674,13 +701,16 @@ const SubmissionPortalPage = () => {
 
       if (transferError) throw transferError;
 
-      const { error: submissionError } = await (supabase as any)
-        .from('submission_portal')
-        .update({ status: nextStatus })
-        .eq('id', rowId);
-
-      if (submissionError) {
-        console.warn('Failed updating submission_portal status:', submissionError);
+      const droppedRow = prev.find((r) => r.id === rowId);
+      if (droppedRow?.submission_id) {
+        try {
+          await (supabase as any)
+            .from('submission_portal')
+            .update({ status: nextStatus })
+            .eq('submission_id', droppedRow.submission_id);
+        } catch {
+          // submission_portal row may not exist — ignore
+        }
       }
 
       toast({
@@ -724,13 +754,22 @@ const SubmissionPortalPage = () => {
 
   const getStageDisplayLabel = (label: string) => label.replace(/^Stage\s+\d+\s*:\s*/i, "");
 
-  const allStageOptions = useMemo(() => buildAllowedStatuses(), [kanbanStages]);
+  const allParentStageLabels = useMemo(
+    () => parentStages.map((s) => s.label),
+    [parentStages]
+  );
 
   const editStageMatches = useMemo(() => {
     const query = (editStage || '').trim().toLowerCase();
-    if (!query) return allStageOptions;
-    return allStageOptions.filter((label) => label.toLowerCase().includes(query));
-  }, [allStageOptions, editStage]);
+    if (!query) return allParentStageLabels;
+    return allParentStageLabels.filter((label) => label.toLowerCase().includes(query));
+  }, [allParentStageLabels, editStage]);
+
+  // Available reasons for the currently selected parent in the edit form
+  const editAvailableReasons = useMemo(() => {
+    const parentLabel = (editStage || '').trim();
+    return reasonsByParent[parentLabel] || [];
+  }, [editStage, reasonsByParent]);
 
   if (loading) {
     return (
@@ -752,7 +791,9 @@ const SubmissionPortalPage = () => {
 
   const handleOpenEdit = (row: SubmissionPortalRow) => {
     setEditRow(row);
-    setEditStage((row.status || '').trim());
+    const { parent, reason } = parseStageLabel((row.status || '').trim());
+    setEditStage(parent);
+    setEditReason(reason || '');
     setEditNotes('');
     setEditStageOpen(false);
     setEditOpen(true);
@@ -760,8 +801,15 @@ const SubmissionPortalPage = () => {
 
   const handleSaveEdit = async () => {
     if (!editRow) return;
-    const nextStage = (editStage || '').trim();
-    if (!nextStage) return;
+    const parentLabel = (editStage || '').trim();
+    if (!parentLabel) return;
+
+    // Build the full status: "Parent - Reason" or just "Parent"
+    const reasons = reasonsByParent[parentLabel];
+    const selectedReason = (editReason || '').trim();
+    const nextStage = reasons && reasons.length > 0 && selectedReason
+      ? buildStatusLabel(parentLabel, selectedReason)
+      : parentLabel;
 
     const previousStage = (editRow.status || '').trim();
     const stageChanged = previousStage !== nextStage;
@@ -775,6 +823,18 @@ const SubmissionPortalPage = () => {
         .eq('id', editRow.id);
 
       if (flowError) throw flowError;
+
+      // Also update submission_portal if the record exists there
+      if (editRow.submission_id) {
+        try {
+          await (supabase as any)
+            .from('submission_portal')
+            .update({ status: nextStage })
+            .eq('submission_id', editRow.submission_id);
+        } catch {
+          // submission_portal row may not exist — ignore
+        }
+      }
 
       const notesText = (editNotes || '').trim() || 'No notes provided.';
 
@@ -900,14 +960,13 @@ const SubmissionPortalPage = () => {
               </Select>
 
               <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v)}>
-                <SelectTrigger className="w-48">
+                <SelectTrigger className="w-64">
                   <SelectValue placeholder="All Statuses" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
                     <SelectItem value="__ALL__">All Statuses</SelectItem>
-                    <SelectItem value="Pending Approval">Pending Approval</SelectItem>
-                    {kanbanStages.map((s) => (
+                    {dbSubmissionStages.map((s) => (
                       <SelectItem key={s.key} value={s.label}>
                         {s.label}
                       </SelectItem>
@@ -1062,6 +1121,15 @@ const SubmissionPortalPage = () => {
                                     <div className="text-xs text-muted-foreground">{row.date || ''}</div>
                                   </div>
 
+                                  {(() => {
+                                    const { reason } = parseStageLabel((row.status || '').trim());
+                                    return reason ? (
+                                      <div className="mt-1.5">
+                                        <Badge variant="outline" className="text-[11px] font-normal">{reason}</Badge>
+                                      </div>
+                                    ) : null;
+                                  })()}
+
                                   <div className="mt-2 grid grid-cols-1 gap-1 text-xs text-muted-foreground">
                                     <div>
                                       <span className="font-medium">Closer:</span> {closer}
@@ -1140,6 +1208,7 @@ const SubmissionPortalPage = () => {
                   onFocus={() => setEditStageOpen(true)}
                   onChange={(e) => {
                     setEditStage(e.target.value);
+                    setEditReason('');
                     setEditStageOpen(true);
                   }}
                   onBlur={() => {
@@ -1160,6 +1229,7 @@ const SubmissionPortalPage = () => {
                           onMouseDown={(e) => e.preventDefault()}
                           onClick={() => {
                             setEditStage(label);
+                            setEditReason('');
                             setEditStageOpen(false);
                           }}
                         >
@@ -1171,6 +1241,26 @@ const SubmissionPortalPage = () => {
                 )}
               </div>
             </div>
+
+            {editAvailableReasons.length > 0 && (
+              <div className="space-y-2">
+                <Label>Reason</Label>
+                <Select value={editReason} onValueChange={(v) => setEditReason(v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select reason..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {editAvailableReasons.map((reason) => (
+                        <SelectItem key={reason} value={reason}>
+                          {reason}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label>Notes</Label>

@@ -254,9 +254,12 @@ const TransferPortalPage = () => {
         };
       });
 
+      const transferStageStatuses = new Set<string>(kanbanStages.map((s) => (s.label || '').trim()).filter(Boolean));
       const submissionStatuses = new Set<string>(['Pending Approval', ...submissionPortalStageLabels]);
       const transferPortalOnlyRows = transferRows.filter((row) => {
         const status = (row.status || '').trim();
+        if (!status) return true;
+        if (transferStageStatuses.has(status)) return true;
         return !submissionStatuses.has(status);
       });
 
@@ -341,7 +344,7 @@ const TransferPortalPage = () => {
   const handleSaveEdit = async () => {
     if (!editRow) return;
 
-    const nextStage = (editStage || '').trim();
+    const nextStage = normalizeSubmissionTransitionStatus((editStage || '').trim());
     if (!nextStage) return;
 
     const previousStage = (editRow.status || '').trim();
@@ -586,8 +589,17 @@ const TransferPortalPage = () => {
     return (stage?.label || '').trim() || stageKey;
   };
 
+  const normalizeSubmissionTransitionStatus = (status: string): string => {
+    const trimmed = (status || '').trim();
+    if (trimmed !== 'Pending Approval') return trimmed;
+    const insuranceDocsStatus = submissionPortalStageLabels.find((label) =>
+      label.includes('Insurance Docs Pending')
+    );
+    return (insuranceDocsStatus || submissionPortalStageLabels[0] || trimmed).trim();
+  };
+
   const handleDropToStage = async (rowId: string, stageKey: string) => {
-    const nextStatus = getStatusForStage(stageKey);
+    const nextStatus = normalizeSubmissionTransitionStatus(getStatusForStage(stageKey));
 
     const prev = data;
     const next = prev.map((r) => (r.id === rowId ? { ...r, status: nextStatus } : r));
