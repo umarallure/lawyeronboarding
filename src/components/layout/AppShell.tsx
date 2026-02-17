@@ -28,9 +28,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/hooks/useAuth';
-import { useLicensedAgent } from '@/hooks/useLicensedAgent';
-import { useCenterUser } from '@/hooks/useCenterUser';
-import { canAccessNavigation, isRestrictedUser } from '@/lib/userPermissions';
 
 type NavItem = {
   label: string;
@@ -59,8 +56,6 @@ const AppShell = ({
   autoCollapseSidebarAfterMs,
 }: AppShellProps) => {
   const { user, signOut } = useAuth();
-  const { isLicensedAgent, loading: licensedLoading } = useLicensedAgent();
-  const { isCenterUser, loading: centerLoading } = useCenterUser();
   const navigate = useNavigate();
   const location = useLocation();
   const locationState = (location.state as { activeNav?: string } | null) || null;
@@ -149,97 +144,69 @@ const AppShell = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoCollapseSidebarAfterMs, isSidebarCollapsed]);
 
-  const isBen = user?.id === '89da43d0-db34-4ffe-b6f1-8ca2453d2d76';
-  const isAuthorizedUser = user?.id === '89da43d0-db34-4ffe-b6f1-8ca2453d2d76';
-  const hasNavigationAccess = canAccessNavigation(user?.id);
-
   const navItems = useMemo<NavItem[]>(() => {
-    const restricted = isRestrictedUser(user?.id);
-    const canAccessAgentPages = !isCenterUser && !restricted;
-
-    // Keep nav aligned with existing access rules.
     const items: NavItem[] = [
       {
         label: 'Dashboard',
         to: '/manager-dashboard',
         icon: <LayoutDashboard className="h-4 w-4 text-current" />,
-        show: canAccessAgentPages,
       },
       {
         label: 'Leads',
         to: '/leads',
         icon: <Users className="h-4 w-4 text-current" />,
         end: true,
-        show: canAccessAgentPages,
       },
       {
         label: 'Daily Deal Flow',
         to: '/daily-deal-flow',
         icon: <Grid3X3 className="h-4 w-4 text-current" />,
-        show: canAccessAgentPages || restricted,
       },
       {
         label: 'Sales Map',
         to: '/sales-map',
         icon: <Map className="h-4 w-4 text-current" />,
-        show: canAccessAgentPages,
       },
       {
         label: 'Order Fulfillment',
         to: '/order-fulfillment',
         icon: <Package className="h-4 w-4 text-current" />,
-        show: canAccessAgentPages,
       },
       {
         label: 'Transfer Portal',
         to: '/transfer-portal',
         icon: <Eye className="h-4 w-4 text-current" />,
-        show: canAccessAgentPages,
       },
       {
         label: 'Submission Portal',
         to: '/submission-portal',
         icon: <CheckCircle className="h-4 w-4 text-current" />,
-        show: canAccessAgentPages,
       },
       {
         label: 'Retainers',
         to: '/retainers',
         icon: <TbUserShield className="h-4 w-4 text-current" />,
         end: true,
-        show: canAccessAgentPages,
       },
       {
         label: 'Agent Reports & Logs',
         to: '/reports',
         icon: <BarChart3 className="h-4 w-4 text-current" />,
-        show: canAccessAgentPages,
       },
       {
         label: 'Admin Analytics',
         to: '/admin-analytics/agents',
         icon: <BarChart3 className="h-4 w-4 text-current" />,
-        show: canAccessAgentPages,
       },
       {
         label: 'GHL Sync Portal',
         to: '/ghl-sync',
         icon: <Zap className="h-4 w-4 text-current" />,
-        show: canAccessAgentPages,
       },
     ];
 
     return items.filter((i) => i.show !== false);
-  }, [
-    user?.id,
-    isLicensedAgent,
-    licensedLoading,
-    isCenterUser,
-    centerLoading,
-    isBen,
-    isAuthorizedUser,
-    hasNavigationAccess,
-  ]);
+  }, []);
 
   const handleSignOut = async () => {
     await signOut();
@@ -276,7 +243,7 @@ const AppShell = ({
           >
             <img
               src={isSidebarCollapsed ? '/assets/logo-collapse.png' : '/assets/logo.png'}
-              alt="Crash Guard"
+              alt="Lawyer Onboarding Portal"
               className={isSidebarCollapsed ? "h-10 w-auto max-w-full" : "h-7 w-auto"}
             />
           </div>

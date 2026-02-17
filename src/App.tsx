@@ -5,12 +5,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import CenterProtectedRoute from "@/components/CenterProtectedRoute";
-import LicensedAgentProtectedRoute from "@/components/LicensedAgentProtectedRoute";
 import { AgentActivityDashboard } from "@/components/AgentActivityDashboard";
 import ReportsPage from "./pages/Reports";
 import Auth from "./pages/Auth";
-import CenterAuth from "./pages/CenterAuth";
 import Dashboard from "./pages/Dashboard";
 import Leads from "./pages/Leads";
 import CenterLeadPortal from "./pages/CenterLeadPortal";
@@ -58,7 +55,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Auth />} />
             <Route path="/auth" element={<Auth />} />
-            <Route path="/center-auth" element={<CenterAuth />} />
+            <Route path="/center-auth" element={<Navigate to="/auth" replace />} />
             <Route 
               path="/dashboard" 
               element={
@@ -134,41 +131,41 @@ const App = () => (
             <Route 
               path="/center-lead-portal" 
               element={
-                <CenterProtectedRoute>
+                <ProtectedRoute>
                   <AppShell title="My Leads">
                     <CenterLeadPortal />
                   </AppShell>
-                </CenterProtectedRoute>
+                </ProtectedRoute>
               } 
             />
             <Route 
               path="/center-calendar-view" 
               element={
-                <CenterProtectedRoute>
+                <ProtectedRoute>
                   <AppShell title="Calendar View">
                     <CenterCalendarView />
                   </AppShell>
-                </CenterProtectedRoute>
+                </ProtectedRoute>
               } 
             />
             <Route 
               path="/center-callback-request" 
               element={
-                <CenterProtectedRoute>
+                <ProtectedRoute>
                   <AppShell title="Callback Request">
                     <CallbackRequestPage />
                   </AppShell>
-                </CenterProtectedRoute>
+                </ProtectedRoute>
               } 
             />
             <Route 
               path="/commission-portal" 
               element={
-                <LicensedAgentProtectedRoute>
+                <ProtectedRoute>
                   <AppShell title="Retainers">
                     <CommissionPortal />
                   </AppShell>
-                </LicensedAgentProtectedRoute>
+                </ProtectedRoute>
               } 
             />
             <Route 
@@ -304,7 +301,7 @@ const App = () => (
               path="/agent-licensing" 
               element={
                 <ProtectedRoute>
-                  <AppShell title="Find Eligible Closers">
+                  <AppShell title="Find Eligible Onboarding Agents">
                     <AgentLicensing />
                   </AppShell>
                 </ProtectedRoute>

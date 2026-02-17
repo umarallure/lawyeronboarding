@@ -92,7 +92,7 @@ export const NavigationHeader = ({ title, showBackButton = false, backTo }: Navi
     <div className="border-b bg-card">
       <div className="container mx-auto px-4 py-4 flex justify-between items-center">
         <div className="flex items-center space-x-4">
-          <img src="/assets/logo.png" alt="Crash Guard" className="h-10 w-auto" />
+          <img src="/assets/logo.png" alt="Lawyer Onboarding Portal" className="h-10 w-auto" />
           {showBackButton && (
             <Button
               variant="outline"

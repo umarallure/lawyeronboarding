@@ -6,8 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { isCenterUser } from '@/lib/userPermissions';
-import { Loader2, ShieldCheck, Zap, BarChart3, Lock, Eye, EyeOff } from 'lucide-react';
+import { hasOnboardingPortalAccess } from '@/lib/portalAccess';
+import { Loader2, Zap, BarChart3, Lock, Eye, EyeOff } from 'lucide-react';
 
 const Auth = () => {
   const [email, setEmail] = useState('');
@@ -18,45 +18,14 @@ const Auth = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const ensureAgentRoleOrSignOut = useCallback(async (userId: string): Promise<boolean> => {
-    const client = (await import('@/integrations/supabase/client')).supabase;
-    const untypedClient = client as unknown as {
-      from: (table: string) => {
-        select: (columns: string) => {
-          eq: (column: string, value: string) => {
-            maybeSingle: () => Promise<{ data: { role?: string | null } | null; error: unknown }>;
-          };
-        };
-      };
-    };
+  const ensureAdminAccessOrSignOut = useCallback(async (userId: string): Promise<boolean> => {
+    const hasAccess = await hasOnboardingPortalAccess(userId);
 
-    const { data: appUser, error: appUserError } = await untypedClient
-      .from('app_users')
-      .select('role')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    const roleFromAppUsers = appUserError ? null : (appUser?.role as string | null | undefined);
-    const hasAgentRoleInAppUsers = roleFromAppUsers === 'agent';
-
-    if (hasAgentRoleInAppUsers) {
-      return true;
-    }
-
-    const { data: userRole, error: userRoleError } = await client
-      .from('user_roles')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('role', 'agent')
-      .eq('is_active', true)
-      .limit(1)
-      .maybeSingle();
-
-    if (appUserError || userRoleError || !userRole) {
+    if (!hasAccess) {
       await signOut();
       toast({
         title: 'Access denied',
-        description: 'To login, please contact an admin!',
+        description: 'Only admin and super_admin users can access this portal.',
         variant: 'destructive',
       });
       return false;
@@ -68,26 +37,21 @@ const Auth = () => {
   useEffect(() => {
     const checkUserRedirect = async () => {
       if (user) {
-        const canAccess = await ensureAgentRoleOrSignOut(user.id);
+        const canAccess = await ensureAdminAccessOrSignOut(user.id);
         if (!canAccess) return;
-        const isCenter = await isCenterUser(user.id);
-        if (isCenter) {
-          navigate('/center-lead-portal');
-        } else {
-          navigate('/dashboard');
-        }
+        navigate('/dashboard');
       }
     };
 
     checkUserRedirect();
-  }, [user, navigate, ensureAgentRoleOrSignOut]);
+  }, [user, navigate, ensureAdminAccessOrSignOut]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     const { error, user: signedInUser } = await signIn(email, password);
     if (!error && signedInUser) {
-      const canAccess = await ensureAgentRoleOrSignOut(signedInUser.id);
+      const canAccess = await ensureAdminAccessOrSignOut(signedInUser.id);
       if (canAccess) {
         toast({
           title: 'Welcome back!',
@@ -121,7 +85,7 @@ const Auth = () => {
       {/* --- Main Container --- */}
       <div className="relative z-10 w-full max-w-6xl px-4 pt-10 animate-in fade-in slide-in-from-bottom-8 duration-700">
         <div className="w-full flex justify-between items-center">
-          <img src="/assets/logo.png" alt="Crash Guard" className="h-16 w-auto drop-shadow-md" />
+          <img src="/assets/logo.png" alt="Lawyer Onboarding Portal" className="h-16 w-auto drop-shadow-md" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 lg:gap-8 items-center">
@@ -130,14 +94,14 @@ const Auth = () => {
           <div className="hidden lg:flex flex-col justify-center h-full space-y-8 pr-10">
             <div className="space-y-4">
               <h1 className="text-5xl font-bold tracking-tight text-foreground leading-[1.1]">
-                Manage leads with <br />
+                Manage lawyer onboarding with <br />
                 {/* Gradient adjusted to primary → black */}
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-black">
                   precision & speed.
                 </span>
               </h1>
               <p className="text-lg text-muted-foreground max-w-md leading-relaxed">
-                Your command center for deal flow. Access real-time analytics, manage calls, and track performance in one secure workspace.
+                Your command center for lawyer onboarding operations. Access real-time analytics, manage workflows, and track progress in one secure workspace.
               </p>
             </div>
 

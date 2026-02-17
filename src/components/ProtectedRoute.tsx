@@ -1,87 +1,38 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { isRestrictedUser, isCenterUser } from '@/lib/userPermissions';
-import { useLicensedAgent } from '@/hooks/useLicensedAgent';
+import { hasOnboardingPortalAccess } from '@/lib/portalAccess';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
 const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
-  const { user, loading } = useAuth();
-  const { isLicensedAgent, loading: licensedLoading } = useLicensedAgent();
+  const { user, loading, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [centerCheckLoading, setCenterCheckLoading] = useState(false);
+  const [accessCheckLoading, setAccessCheckLoading] = useState(false);
 
   useEffect(() => {
     const checkUserAccess = async () => {
-      if (loading || licensedLoading || !user) return;
+      if (loading || !user) return;
 
-      console.log('[ProtectedRoute] User access check:', {
-        userId: user.id,
-        email: user.email,
-        isLicensedAgent,
-        currentPath: location.pathname
-      });
+      setAccessCheckLoading(true);
+      const hasAccess = await hasOnboardingPortalAccess(user.id);
+      setAccessCheckLoading(false);
 
-      // Licensed agents can access commission-portal and dashboard
-      if (isLicensedAgent) {
-        console.log('[ProtectedRoute] Licensed agent detected');
-        
-        // Check if user is restricted and redirect them appropriately
-        if (isRestrictedUser(user.id)) {
-          const currentPath = location.pathname;
-          console.log('[ProtectedRoute] Licensed agent is also restricted, redirecting to daily-deal-flow');
-
-          // Only allow access to /daily-deal-flow for restricted users
-          if (currentPath !== '/daily-deal-flow') {
-            navigate('/daily-deal-flow', { replace: true });
-          }
-        }
-        // Licensed agents can access commission-portal and dashboard, no redirect needed
-        console.log('[ProtectedRoute] Licensed agent accessing:', location.pathname);
+      if (hasAccess) {
         return;
       }
 
-      console.log('[ProtectedRoute] Not a licensed agent, checking center user status');
-      setCenterCheckLoading(true);
-      const isCenter = await isCenterUser(user.id);
-      setCenterCheckLoading(false);
-      
-      console.log('[ProtectedRoute] Center user check result:', isCenter);
-
-      // Center users can access their portal and agent-licensing page
-      const centerAllowedPaths = ['/center-lead-portal', '/agent-licensing', '/center-callback-request'];
-      const currentPath = location.pathname;
-      
-      // Redirect center users to their portal if they try to access other protected routes
-      if (isCenter && !centerAllowedPaths.includes(currentPath)) {
-        console.log('[ProtectedRoute] Redirecting center user to /center-lead-portal from:', currentPath);
-        navigate('/center-lead-portal', { replace: true });
-        return;
-      }
-
-      // Check if user is restricted and redirect them appropriately
-      if (isRestrictedUser(user.id)) {
-        const currentPath = location.pathname;
-        console.log('[ProtectedRoute] Restricted user detected, current path:', currentPath);
-
-        // Only allow access to /daily-deal-flow for restricted users
-        if (currentPath !== '/daily-deal-flow') {
-          console.log('[ProtectedRoute] Redirecting restricted user to /daily-deal-flow');
-          navigate('/daily-deal-flow', { replace: true });
-        }
-      }
-      
-      console.log('[ProtectedRoute] Access check complete, allowing access to:', location.pathname);
+      await signOut();
+      navigate('/auth', { replace: true, state: { from: location.pathname } });
     };
 
     checkUserAccess();
-  }, [user, loading, licensedLoading, isLicensedAgent, navigate, location.pathname]);
+  }, [user, loading, navigate, location.pathname, signOut]);
 
-  if (loading || licensedLoading || centerCheckLoading) {
+  if (loading || accessCheckLoading) {
     // Avoid full-screen loaders so the app shell remains visible.
     // Page-level loading states still handle data fetching UX.
     return user ? <>{children}</> : null;

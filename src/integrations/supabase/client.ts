@@ -7,7 +7,7 @@ const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+const baseSupabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
     storage: localStorage,
     persistSession: true,
@@ -20,3 +20,86 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     }
   }
 });
+
+// Temporary onboarding bootstrap mode:
+// keep auth + admin role checks active, but suppress all other data fetching/mutations.
+const DISABLE_PORTAL_DATA_FETCH = (import.meta.env.VITE_DISABLE_PORTAL_DATA_FETCH ?? 'true') === 'true';
+const LOGIN_ALLOWED_TABLES = new Set(['app_users', 'user_roles']);
+
+const createNoDataResult = (single = false) => ({
+  data: single ? null : [],
+  error: null,
+  count: 0,
+  status: 200,
+  statusText: 'OK',
+});
+
+const createNoDataQueryBuilder = () => {
+  const query: Record<string, (...args: unknown[]) => unknown> = {};
+  const noDataPromise = Promise.resolve(createNoDataResult());
+
+  const chainMethods = [
+    'select',
+    'insert',
+    'update',
+    'upsert',
+    'delete',
+    'eq',
+    'neq',
+    'gt',
+    'gte',
+    'lt',
+    'lte',
+    'in',
+    'is',
+    'like',
+    'ilike',
+    'contains',
+    'containedBy',
+    'not',
+    'or',
+    'order',
+    'limit',
+    'range',
+    'match',
+    'csv',
+  ];
+
+  chainMethods.forEach((method) => {
+    query[method] = () => query;
+  });
+
+  query.single = async () => createNoDataResult(true);
+  query.maybeSingle = async () => createNoDataResult(true);
+  query.then = noDataPromise.then.bind(noDataPromise);
+  query.catch = noDataPromise.catch.bind(noDataPromise);
+  query.finally = noDataPromise.finally.bind(noDataPromise);
+
+  return query;
+};
+
+const proxySupabase = new Proxy(baseSupabase as unknown as object, {
+  get(target, prop, receiver) {
+    if (!DISABLE_PORTAL_DATA_FETCH) {
+      return Reflect.get(target, prop, receiver);
+    }
+
+    if (prop === 'from') {
+      return (table: string) => {
+        if (LOGIN_ALLOWED_TABLES.has(table)) {
+          const fromFn = Reflect.get(target, 'from') as (relation: string) => unknown;
+          return fromFn(table);
+        }
+        return createNoDataQueryBuilder();
+      };
+    }
+
+    if (prop === 'rpc') {
+      return async () => createNoDataResult(true);
+    }
+
+    return Reflect.get(target, prop, receiver);
+  },
+}) as typeof baseSupabase;
+
+export const supabase = proxySupabase as unknown as typeof baseSupabase;

@@ -1132,7 +1132,7 @@ const SubmissionPortalPage = () => {
 
                                   <div className="mt-2 grid grid-cols-1 gap-1 text-xs text-muted-foreground">
                                     <div>
-                                      <span className="font-medium">Closer:</span> {closer}
+                                      <span className="font-medium">Onboarding Agent:</span> {closer}
                                     </div>
                                     <div>
                                       <span className="font-medium">Attorney:</span> {attorney}

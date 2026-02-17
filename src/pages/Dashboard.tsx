@@ -223,7 +223,7 @@ const Dashboard = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Closers</CardTitle>
+            <CardTitle className="text-sm">Onboarding Agents</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-semibold">{stats.agents}</div>
