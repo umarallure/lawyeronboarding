@@ -2,10 +2,10 @@
 
 ## 🎯 Overview
 
-Extended the Deal Flow & Policy Lookup page with **intelligent name search** functionality that handles different name format variations between Daily Deal Flow and Monday.com systems.
+Extended the Deal Flow & Policy Lookup page with **intelligent name search** functionality that handles different name format variations between Daily Outreach Report and Monday.com systems.
 
 **Problem Solved:**
-- Daily Deal Flow: `Julia Jordan`
+- Daily Outreach Report: `Julia Jordan`
 - Monday.com: `JORDAN, JULIA`
 - ✅ Both formats now searchable with one query!
 
@@ -166,7 +166,7 @@ const matchedItems = allItems.filter((item) => {
 
 **✅ Works With:**
 ```sql
--- Daily Deal Flow names:
+-- Daily Outreach Report names:
 Teresa K Gibbs
 Awad Khotary
 Betty Smith
@@ -211,7 +211,7 @@ STEWART, DENITA
 
 ### Test Case 1: "Betty Smith"
 ```sql
-✅ Found in Daily Deal Flow
+✅ Found in Daily Outreach Report
 ✅ Query: SELECT * WHERE insured_name ILIKE '%betty%smith%'
 ✅ Result: 1 record (610) 298-1004
 ```
@@ -282,7 +282,7 @@ Generate Variations
            ↓
     [julia jordan, JORDAN, JULIA, jordan julia, ...]
            ↓
-Query Daily Deal Flow
+Query Daily Outreach Report
            ↓
     SELECT * WHERE insured_name ILIKE ANY(variations)
            ↓
@@ -363,7 +363,7 @@ const matchedItems = allItems.filter((item) => {
 ## ⚠️ Important Considerations
 
 ### Performance
-- ✅ Daily Deal Flow query optimized with `ilike` indexes
+- ✅ Daily Outreach Report query optimized with `ilike` indexes
 - ✅ Monday.com fetches all items once, filters in-memory
 - ⚠️ Large Monday.com boards (>1000 items) may be slow
 - 💡 Future: Consider pagination or indexed name column

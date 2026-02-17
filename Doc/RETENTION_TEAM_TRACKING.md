@@ -131,7 +131,7 @@ const submitCallResult = async (formData) => {
 };
 ```
 
-#### 4. **Daily Deal Flow**
+#### 4. **Daily Outreach Report**
 **Location:** Triggers/automated inserts to daily_deal_flow
 
 **Changes Needed:**

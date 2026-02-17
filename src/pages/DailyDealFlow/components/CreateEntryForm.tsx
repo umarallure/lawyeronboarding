@@ -253,7 +253,7 @@ export const CreateEntryForm = ({ onSuccess }: CreateEntryFormProps) => {
       
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create New Daily Deal Flow Entry</DialogTitle>
+          <DialogTitle>Create New Daily Outreach Report Entry</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">

@@ -381,7 +381,7 @@ const CallbackRequestPage = () => {
               </CardContent>
             </Card>
 
-            {/* Call History from Daily Deal Flow */}
+            {/* Call History from Daily Outreach Report */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">

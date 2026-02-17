@@ -562,7 +562,7 @@ serve(async (req)=>{
           sheetId = Deno.env.get('GOOGLE_SHEETS_AGENT_CALLBACK_ID') ?? '';
           break;
         case 'First Time Transfer':
-          sheetName = 'Daily Deal Flow';
+          sheetName = 'Daily Outreach Report';
           sheetId = Deno.env.get('GOOGLE_SHEETS_DAILY_DEAL_FLOW_ID') ?? '';
           break;
         default:

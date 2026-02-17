@@ -20,7 +20,7 @@
 └────────────────────────┬────────────────────────────────────────┘
                          ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│ STEP 3: Search Daily Deal Flow by Name                         │
+│ STEP 3: Search Daily Outreach Report by Name                         │
 │ Query: SELECT * FROM daily_deal_flow                            │
 │        WHERE insured_name ILIKE '%variation%'                   │
 │                                                                  │
@@ -63,7 +63,7 @@
 
 ### ✅ What This Workflow Does
 
-1. **User searches by NAME** → Finds records in Daily Deal Flow
+1. **User searches by NAME** → Finds records in Daily Outreach Report
 2. **System uses PHONE from those records** → Queries Monday.com
 3. **Result:** Accurate Monday.com policies linked to the correct client
 
@@ -75,8 +75,8 @@
 - ✅ No name format confusion (Julia Jordan vs JORDAN, JULIA)
 - ✅ Faster Monday.com queries (indexed phone column)
 
-**Name Search is for Daily Deal Flow Only:**
-- ✅ Handles multiple name formats in Daily Deal Flow
+**Name Search is for Daily Outreach Report Only:**
+- ✅ Handles multiple name formats in Daily Outreach Report
 - ✅ Fuzzy matching for typos and variations
 - ✅ After finding records, phone takes over for Monday.com
 
@@ -134,7 +134,7 @@ const handleFetchPolicyInfo = async (
 ```typescript
 <AccordionTrigger
   onClick={() => handleFetchPolicyInfo(
-    result.client_phone_number,  // ← Phone from Daily Deal Flow
+    result.client_phone_number,  // ← Phone from Daily Outreach Report
     result.insured_name,          // ← Name (not used for Monday.com)
     result.id
   )}
@@ -149,7 +149,7 @@ const handleFetchPolicyInfo = async (
 
 ### Scenario: Search for "Anthony Curtiss Brooks"
 
-**Step 1: Name Search in Daily Deal Flow**
+**Step 1: Name Search in Daily Outreach Report**
 ```sql
 -- Finds records with name variations
 SELECT * FROM daily_deal_flow 
@@ -265,7 +265,7 @@ Response: {
 ```typescript
 // NOT USED in current workflow
 // Kept for potential future use
-// Name search happens in Daily Deal Flow only
+// Name search happens in Daily Outreach Report only
 ```
 
 ---
@@ -307,14 +307,14 @@ Response: {
 
 ### Problem with Name-Based Search:
 ```javascript
-// Daily Deal Flow name: "Anthony Curtiss Brooks"
+// Daily Outreach Report name: "Anthony Curtiss Brooks"
 // Monday.com name: "BROOKS, ANTHONY"
 // Would require complex matching and might miss records
 ```
 
 ### Solution with Phone-Based Search:
 ```javascript
-// Daily Deal Flow: phone "(555) 123-4567"
+// Daily Outreach Report: phone "(555) 123-4567"
 // Monday.com: phone "15551234567"
 // Always finds correct record with normalization
 ```
@@ -323,7 +323,7 @@ Response: {
 
 ## ✅ Testing Checklist
 
-- [x] Search by name in Daily Deal Flow works
+- [x] Search by name in Daily Outreach Report works
 - [x] Multiple name formats handled
 - [x] Results show phone numbers
 - [x] Click "Monday.com Policy" uses phone
@@ -336,7 +336,7 @@ Response: {
 ## 🚀 Summary
 
 **The Workflow:**
-1. ✅ Name search finds records in Daily Deal Flow
+1. ✅ Name search finds records in Daily Outreach Report
 2. ✅ Phone numbers extracted from those records
 3. ✅ Monday.com queried using phone (not name)
 4. ✅ Accurate policy information displayed

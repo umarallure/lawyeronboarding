@@ -107,7 +107,7 @@ normalizePhoneNumber(phone: string) {
 }
 ```
 
-### Daily Deal Flow Query
+### Daily Outreach Report Query
 
 ```typescript
 const { data, error } = await supabase
@@ -169,7 +169,7 @@ Display in Accordion
 
 ### Data Structures
 
-#### Daily Deal Flow Record
+#### Daily Outreach Report Record
 ```typescript
 {
   id: string;
@@ -343,7 +343,7 @@ https://supabase.com/dashboard/project/gqhcjqxcvhgwsqfqgekh/logs/edge-functions
 - 📝 Comprehensive error handling
 
 ### 🌐 Integration
-- ✅ Daily Deal Flow table (direct query)
+- ✅ Daily Outreach Report table (direct query)
 - ✅ Monday.com GraphQL API (via edge function)
 - ✅ Supabase Authentication
 - ✅ React Query for data fetching

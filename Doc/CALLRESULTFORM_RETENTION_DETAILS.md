@@ -133,7 +133,7 @@ await logCallUpdate({
 
 ---
 
-### 7. **Daily Deal Flow Sync Updated**
+### 7. **Daily Outreach Report Sync Updated**
 
 The Edge Function call now includes retention flag:
 
@@ -239,7 +239,7 @@ User Submits Form
 2. Query: `SELECT is_retention_call FROM call_results WHERE submission_id = 'TEST'`
 3. ✅ Should return true
 
-### Test 3: Daily Deal Flow Sync
+### Test 3: Daily Outreach Report Sync
 1. Submit form with retention flag = true
 2. Query: `SELECT is_retention_call FROM daily_deal_flow WHERE submission_id = 'TEST'`
 3. ✅ Should return true

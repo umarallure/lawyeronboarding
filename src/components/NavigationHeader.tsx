@@ -135,7 +135,7 @@ export const NavigationHeader = ({ title, showBackButton = false, backTo }: Navi
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => navigate('/daily-deal-flow')}>
                       <Grid3X3 className="mr-2 h-4 w-4" />
-                      Daily Deal Flow
+                      Daily Outreach Report
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => navigate('/transfer-portal')}>
                       <Eye className="mr-2 h-4 w-4" />

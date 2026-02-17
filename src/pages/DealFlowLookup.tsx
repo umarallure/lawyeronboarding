@@ -321,7 +321,7 @@ export default function DealFlowLookup() {
     if (policyInfo[resultIdentifier]) return;
     
     // Always prefer phone search for Monday.com as it's more reliable
-    // Even when searching by name, we use the phone from the Daily Deal Flow record
+    // Even when searching by name, we use the phone from the Daily Outreach Report record
     if (!clientPhone) {
       toast.error('Unable to fetch policy info: phone number not available for this record');
       return;
@@ -370,7 +370,7 @@ export default function DealFlowLookup() {
               Deal Flow & Policy Lookup
             </h1>
             <p className="text-muted-foreground mt-2">
-              Search Daily Deal Flow records and Monday.com policies by phone number
+              Search Daily Outreach Report records and Monday.com policies by phone number
             </p>
           </div>
 

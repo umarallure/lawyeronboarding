@@ -97,7 +97,7 @@ Updated `call_results` table types to include all 17 accident fields in:
 
 ## Integration Points
 
-### Daily Deal Flow Sync
+### Daily Outreach Report Sync
 The `update-daily-deal-flow-entry` Edge Function call now receives all accident fields:
 ```typescript
 {

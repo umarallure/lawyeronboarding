@@ -228,7 +228,7 @@ export const OrderRecommendationsCard = (props: {
       toast({
         title: "Cannot assign yet",
         description:
-          "This submission is not in Daily Deal Flow. Create a deal (Daily Deal Flow entry) first, then assign it to an order.",
+          "This submission is not in Daily Outreach Report. Create a deal (Daily Outreach Report entry) first, then assign it to an order.",
         variant: "destructive",
       });
       return false;
@@ -326,12 +326,12 @@ export const OrderRecommendationsCard = (props: {
         {dealFlowStatus === 'loading' ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Checking Daily Deal Flow status…
+            Checking Daily Outreach Report status…
           </div>
         ) : dealFlowStatus === 'not_found' ? (
           <div className="flex items-center gap-2 rounded-md border bg-muted/50 px-3 py-3 text-sm text-muted-foreground">
             <Info className="h-4 w-4 shrink-0" />
-            This lead does not exist in Daily Deal Flow yet. Recommendations cannot be shown until a Daily Deal Flow entry is created.
+            This lead does not exist in Daily Outreach Report yet. Recommendations cannot be shown until a Daily Outreach Report entry is created.
           </div>
         ) : dealFlowStatus === 'already_assigned' ? (
           <div className="flex items-center gap-2 rounded-md border bg-muted/50 px-3 py-3 text-sm text-muted-foreground">

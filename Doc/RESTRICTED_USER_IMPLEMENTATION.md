@@ -1,7 +1,7 @@
 # User Access Restrictions Implementation
 
 ## Summary
-Implemented security restrictions for user ID: `adda1255-2a0b-41da-9df0-3100d01b8649` to provide read-only access to the Daily Deal Flow Page.
+Implemented security restrictions for user ID: `adda1255-2a0b-41da-9df0-3100d01b8649` to provide read-only access to the Daily Outreach Report Page.
 
 ## Changes Made
 
@@ -34,7 +34,7 @@ Implemented security restrictions for user ID: `adda1255-2a0b-41da-9df0-3100d01b
 
 ## Restricted User Experience
 
-When user `adda1255-2a0b-41da-9df0-3100d01b8649` logs in to the Daily Deal Flow page:
+When user `adda1255-2a0b-41da-9df0-3100d01b8649` logs in to the Daily Outreach Report page:
 
 ✅ **Can Access:**
 - View the data grid with all records
@@ -60,7 +60,7 @@ When user `adda1255-2a0b-41da-9df0-3100d01b8649` logs in to the Daily Deal Flow 
 ## Testing
 To test the restrictions:
 1. Login with user ID: `adda1255-2a0b-41da-9df0-3100d01b8649`
-2. Navigate to Daily Deal Flow page
+2. Navigate to Daily Outreach Report page
 3. Verify that only the data grid with search/filter tools is visible
 4. Verify no Actions column is present
 5. Verify no navigation menu is available

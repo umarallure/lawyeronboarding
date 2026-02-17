@@ -233,7 +233,7 @@ const Dashboard = () => {
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <CardTitle className="text-sm">Daily Deal Flow Trend ({getRangeLabel(timeRange)})</CardTitle>
+          <CardTitle className="text-sm">Daily Outreach Report Trend ({getRangeLabel(timeRange)})</CardTitle>
           <Select value={timeRange} onValueChange={(v) => setTimeRange(v as TimeRange)}>
             <SelectTrigger className="w-40">
               <SelectValue />

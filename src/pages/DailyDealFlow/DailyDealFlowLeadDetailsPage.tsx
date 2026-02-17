@@ -143,7 +143,7 @@ const DailyDealFlowLeadDetailsPage = () => {
     const legacyNote = (lead.notes || '').trim();
     if (legacyNote) {
       entries.push({
-        source: 'Daily Deal Flow',
+        source: 'Daily Outreach Report',
         note: legacyNote,
         timestamp: lead.updated_at || lead.created_at || null,
       });

@@ -64,13 +64,13 @@ const AppShell = ({
   const isDailyDealFlowRoute = location.pathname.startsWith('/daily-deal-flow');
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
-    // Outside Daily Deal Flow, keep sidebar open.
+    // Outside Daily Outreach Report, keep sidebar open.
     if (!isDailyDealFlowRoute) return false;
 
-    // If the route provides an explicit default (e.g., Daily Deal Flow), honor it.
+    // If the route provides an explicit default (e.g., Daily Outreach Report), honor it.
     if (defaultSidebarCollapsed !== undefined) return defaultSidebarCollapsed;
 
-    // Otherwise, persist the last choice for Daily Deal Flow.
+    // Otherwise, persist the last choice for Daily Outreach Report.
     try {
       const stored = window.localStorage.getItem('app_shell_sidebar_collapsed');
       if (stored === 'true') return true;
@@ -83,7 +83,7 @@ const AppShell = ({
   });
 
   useEffect(() => {
-    // Keep the persisted state aligned for Daily Deal Flow routes that don't force a default.
+    // Keep the persisted state aligned for Daily Outreach Report routes that don't force a default.
     if (!isDailyDealFlowRoute) return;
     if (defaultSidebarCollapsed !== undefined) return;
     try {
@@ -100,7 +100,7 @@ const AppShell = ({
   }, [isDailyDealFlowRoute, location.pathname]);
 
   useEffect(() => {
-    // If a route forces a default (e.g., Daily Deal Flow), apply it immediately.
+    // If a route forces a default (e.g., Daily Outreach Report), apply it immediately.
     if (defaultSidebarCollapsed === undefined) return;
     if (!isDailyDealFlowRoute) return;
     setSidebarCollapsed(defaultSidebarCollapsed);
@@ -158,22 +158,7 @@ const AppShell = ({
         end: true,
       },
       {
-        label: 'Daily Deal Flow',
-        to: '/daily-deal-flow',
-        icon: <Grid3X3 className="h-4 w-4 text-current" />,
-      },
-      {
-        label: 'Sales Map',
-        to: '/sales-map',
-        icon: <Map className="h-4 w-4 text-current" />,
-      },
-      {
-        label: 'Order Fulfillment',
-        to: '/order-fulfillment',
-        icon: <Package className="h-4 w-4 text-current" />,
-      },
-      {
-        label: 'Transfer Portal',
+        label: 'Cold Call Pipeline',
         to: '/transfer-portal',
         icon: <Eye className="h-4 w-4 text-current" />,
       },
@@ -183,25 +168,9 @@ const AppShell = ({
         icon: <CheckCircle className="h-4 w-4 text-current" />,
       },
       {
-        label: 'Retainers',
-        to: '/retainers',
-        icon: <TbUserShield className="h-4 w-4 text-current" />,
-        end: true,
-      },
-      {
-        label: 'Agent Reports & Logs',
-        to: '/reports',
-        icon: <BarChart3 className="h-4 w-4 text-current" />,
-      },
-      {
-        label: 'Admin Analytics',
-        to: '/admin-analytics/agents',
-        icon: <BarChart3 className="h-4 w-4 text-current" />,
-      },
-      {
-        label: 'GHL Sync Portal',
-        to: '/ghl-sync',
-        icon: <Zap className="h-4 w-4 text-current" />,
+        label: 'Daily Outreach Report',
+        to: '/daily-deal-flow',
+        icon: <Grid3X3 className="h-4 w-4 text-current" />,
       },
     ];
 

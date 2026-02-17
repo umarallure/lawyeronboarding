@@ -22,7 +22,7 @@ Successfully integrated **Lead Vendor Performance** analytics into the existing 
   - ✅ Average Premium ($)
 - **Statuses Tracked**: Pending Approval, Issued Paid, Issued Not Paid
 
-#### Tab 2: Call Transfers (Daily Deal Flow) ⭐ NEW
+#### Tab 2: Call Transfers (Daily Outreach Report) ⭐ NEW
 **Data Source**: `daily_deal_flow` table (Point #1 Complete)
 - Number of transfers per call center
 - Last 30 days of data
@@ -33,7 +33,7 @@ Successfully integrated **Lead Vendor Performance** analytics into the existing 
 
 ## 🗂️ Data Architecture
 
-### Daily Deal Flow Integration
+### Daily Outreach Report Integration
 ```sql
 SELECT 
   lead_vendor,
@@ -107,7 +107,7 @@ Based on real data query:
 - ✅ Carrier distribution
 - ✅ Status tracking (Pending, Issued Paid, etc.)
 
-### Daily Deal Flow Data (Transfers)
+### Daily Outreach Report Data (Transfers)
 - ✅ Number of transfers per call center **[Point #1 Complete]**
 - ✅ Daily average calculations
 - ✅ 30-day trending
@@ -238,7 +238,7 @@ VendorsPerformanceTab
 │   │   └── Monday.com vendor data
 │   │       └── Cards with placements/premium
 │   └── TabsContent: Transfers
-│       └── Daily Deal Flow data
+│       └── Daily Outreach Report data
 │           └── Cards with transfers/daily avg
 └── Loading/Empty States
 ```

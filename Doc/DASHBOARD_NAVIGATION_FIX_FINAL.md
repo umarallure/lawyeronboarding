@@ -110,7 +110,7 @@ console.log('[useLicensedAgent] User IS a licensed agent:', { display_name, agen
 - ✅ Sign Out button
 
 ### What Lydia CANNOT Access 🔒
-- ❌ Daily Deal Flow (admin only)
+- ❌ Daily Outreach Report (admin only)
 - ❌ Transfer Portal (admin only)
 - ❌ Submission Portal (admin only)
 - ❌ Reports & Analytics (admin only)

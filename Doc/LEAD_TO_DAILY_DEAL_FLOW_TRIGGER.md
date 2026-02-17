@@ -1,4 +1,4 @@
-# Lead to Daily Deal Flow Auto-Population System
+# Lead to Daily Outreach Report Auto-Population System
 
 ## Overview
 This system automatically populates the `daily_deal_flow` table with basic lead information whenever a new lead is created in the `leads` table using PostgreSQL triggers and functions.

@@ -195,7 +195,7 @@ const getReasonOptions = (status: string) => {
   }
 };
 
-// Status mapping function for Daily Deal Flow sheet
+// Status mapping function for Daily Outreach Report sheet
 const mapStatusToSheetValue = (userSelectedStatus: string) => {
   const statusMap: { [key: string]: string } = {
     // New statuses map to themselves

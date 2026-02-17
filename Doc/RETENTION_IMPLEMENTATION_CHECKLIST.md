@@ -218,7 +218,7 @@ Result: 5 tables, all synchronized ✅
    - Verify badge appears
    - Verify flag saves to call_results
 
-3. **Check Daily Deal Flow:**
+3. **Check Daily Outreach Report:**
    - Submit result with retention = true
    - Verify daily_deal_flow gets flag
    - Verify Google Sheets sees retention status

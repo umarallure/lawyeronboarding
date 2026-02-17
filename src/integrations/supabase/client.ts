@@ -22,7 +22,7 @@ const rawSupabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KE
 });
 
 const ENABLE_DATALESS_PORTAL_MODE = true;
-const LOGIN_ALLOWED_TABLES = new Set(['app_users', 'user_roles', 'portal_stages']);
+const LOGIN_ALLOWED_TABLES = new Set(['app_users', 'user_roles', 'portal_stages', 'lawyer_leads']);
 
 const createMockQueryBuilder = () => {
   const listResponse = Promise.resolve({ data: [], error: null, count: 0 });

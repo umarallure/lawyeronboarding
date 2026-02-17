@@ -18,7 +18,8 @@ import CallResultUpdate from "./pages/CallResultUpdate";
 import CallResultJourney from "./pages/CallResultJourney";
 import NewCallback from "./pages/NewCallback";
 import DailyDealFlowPage from "./pages/DailyDealFlow/DailyDealFlowPage";
-import DailyDealFlowLeadDetailsPage from "./pages/DailyDealFlow/DailyDealFlowLeadDetailsPage";
+import DailyDealFlowLeadDetailsPage from "@/pages/DailyDealFlow/DailyDealFlowLeadDetailsPage";
+import LawyerLeadDetailsPage from "@/pages/LawyerLeadDetailsPage";
 import LeadDetailsPage from "./pages/LeadDetails/LeadDetailsPage";
 import TransferPortalPage from "./pages/TransferPortalPage";
 import SubmissionPortalPage from "./pages/SubmissionPortalPage";
@@ -229,7 +230,7 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <AppShell
-                    title="Daily Deal Flow"
+                    title="Daily Outreach Report"
                     defaultSidebarCollapsed
                     autoCollapseSidebarAfterMs={2000}
                   >
@@ -248,6 +249,20 @@ const App = () => (
                     autoCollapseSidebarAfterMs={2000}
                   >
                     <DailyDealFlowLeadDetailsPage />
+                  </AppShell>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/lead-detail/:id" 
+              element={
+                <ProtectedRoute>
+                  <AppShell
+                    title="Lawyer Lead Details"
+                    defaultSidebarCollapsed
+                    autoCollapseSidebarAfterMs={2000}
+                  >
+                    <LawyerLeadDetailsPage />
                   </AppShell>
                 </ProtectedRoute>
               } 

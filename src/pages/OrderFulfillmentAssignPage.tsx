@@ -195,7 +195,7 @@ const OrderFulfillmentAssignPage = () => {
       toast({
         title: "Cannot assign yet",
         description:
-          "This submission is not in Daily Deal Flow. Create a deal (Daily Deal Flow entry) first, then assign it to an order.",
+          "This submission is not in Daily Outreach Report. Create a deal (Daily Outreach Report entry) first, then assign it to an order.",
         variant: "destructive",
       });
       return false;

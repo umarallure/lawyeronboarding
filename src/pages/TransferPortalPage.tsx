@@ -29,36 +29,31 @@ import { usePipelineStages, type PipelineStage } from "@/hooks/usePipelineStages
 export interface TransferPortalRow {
   id: string;
   submission_id: string;
-  date?: string;
-  insured_name?: string;
-  lead_vendor?: string;
-  client_phone_number?: string;
-  buffer_agent?: string;
-  agent?: string;
-  licensed_agent_account?: string;
-  status?: string;
-  call_result?: string;
-  carrier?: string;
-  product_type?: string;
-  draft_date?: string;
-  monthly_premium?: number;
-  face_amount?: number;
-  from_callback?: boolean;
-  notes?: string;
-  policy_number?: string;
-  carrier_audit?: string;
-  product_type_carrier?: string;
-  level_or_gi?: string;
+  user_id?: string;
+  pipeline_name?: string;
+  stage_id?: string;
+  submission_date?: string;
+  lawyer_full_name?: string;
+  firm_name?: string;
+  firm_address?: string;
+  firm_phone_no?: string;
+  profile_description?: string;
+  phone_number?: string;
+  email?: string;
+  street_address?: string;
+  city?: string;
+  state?: string;
+  zip_code?: string;
+  additional_notes?: string;
   created_at?: string;
   updated_at?: string;
-  source_type?: string;
 }
 
 const TransferPortalPage = () => {
   const navigate = useNavigate();
 
   // --- Dynamic pipeline stages from DB ---
-  const { stages: dbTransferStages, loading: transferStagesLoading } = usePipelineStages("transfer_portal");
+  const { stages: dbTransferStages, loading: transferStagesLoading } = usePipelineStages("cold_call_pipeline");
   const { stages: dbSubmissionStages, loading: submissionStagesLoading } = usePipelineStages("submission_portal");
 
   const kanbanStages = useMemo(() => {
@@ -88,8 +83,9 @@ const TransferPortalPage = () => {
   }, [kanbanStages, submissionPortalStageLabels]);
 
   const deriveStageKey = (row: TransferPortalRow): string => {
-    const status = (row.status || '').trim();
-    const exact = kanbanStages.find((s) => s.label === status);
+    const stageId = (row.stage_id || '').trim();
+    if (!stageId) return kanbanStages[0]?.key ?? 'transfer_api';
+    const exact = dbTransferStages.find((s) => s.id === stageId);
     return exact?.key ?? kanbanStages[0]?.key ?? 'transfer_api';
   };
 
@@ -119,9 +115,6 @@ const TransferPortalPage = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [allTimeTransfers, setAllTimeTransfers] = useState(0);
-  const [dateFilter, setDateFilter] = useState<string>("");
-  const [sourceTypeFilter, setSourceTypeFilter] = useState("__ALL__");
-  const [leadVendorFilter, setLeadVendorFilter] = useState("__ALL__");
   const [showDuplicates, setShowDuplicates] = useState(true);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -143,12 +136,12 @@ const TransferPortalPage = () => {
   const [editNotes, setEditNotes] = useState<string>("");
   const [editStageOpen, setEditStageOpen] = useState(false);
 
-  // Remove duplicates based on insured_name, client_phone_number, and lead_vendor
+  // Remove duplicates based on lawyer_full_name and phone_number
   const removeDuplicates = (records: TransferPortalRow[]): TransferPortalRow[] => {
     const seen = new Map<string, TransferPortalRow>();
     
     records.forEach(record => {
-      const key = `${record.insured_name || ''}|${record.client_phone_number || ''}|${record.lead_vendor || ''}`;
+      const key = `${record.lawyer_full_name || ''}|${record.phone_number || ''}`;
       
       // Keep the most recent record (first in our sorted array)
       if (!seen.has(key)) {
@@ -163,33 +156,15 @@ const TransferPortalPage = () => {
   const applyFilters = (records: TransferPortalRow[]): TransferPortalRow[] => {
     let filtered = records;
 
-    // Apply date filter
-    if (dateFilter) {
-      filtered = filtered.filter(record => record.date === dateFilter);
-    }
-
-    // Apply source type filter
-    if (sourceTypeFilter !== "__ALL__") {
-      filtered = filtered.filter(record => record.source_type === sourceTypeFilter);
-    }
-
-    // Apply lead vendor filter
-    if (leadVendorFilter !== "__ALL__") {
-      filtered = filtered.filter((record) => (record.lead_vendor || '') === leadVendorFilter);
-    }
-
     // Apply search filter
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
       filtered = filtered.filter(record =>
-        (record.insured_name?.toLowerCase().includes(searchLower)) ||
-        (record.client_phone_number?.toLowerCase().includes(searchLower)) ||
-        (record.lead_vendor?.toLowerCase().includes(searchLower)) ||
-        (record.agent?.toLowerCase().includes(searchLower)) ||
-        (record.buffer_agent?.toLowerCase().includes(searchLower)) ||
-        (record.licensed_agent_account?.toLowerCase().includes(searchLower)) ||
-        (record.carrier?.toLowerCase().includes(searchLower)) ||
-        (record.product_type?.toLowerCase().includes(searchLower))
+        (record.lawyer_full_name?.toLowerCase().includes(searchLower)) ||
+        (record.phone_number?.toLowerCase().includes(searchLower)) ||
+        (record.firm_name?.toLowerCase().includes(searchLower)) ||
+        (record.email?.toLowerCase().includes(searchLower)) ||
+        (record.submission_id?.toLowerCase().includes(searchLower))
       );
     }
 
@@ -201,14 +176,6 @@ const TransferPortalPage = () => {
     return filtered;
   };
 
-  const leadVendorOptions = useMemo(() => {
-    const set = new Set<string>();
-    (data || []).forEach((r) => {
-      const v = (r.lead_vendor || '').trim();
-      if (v) set.add(v);
-    });
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [data]);
 
   const { toast } = useToast();
 
@@ -217,21 +184,34 @@ const TransferPortalPage = () => {
     try {
       setRefreshing(true);
 
-      let transfersQuery = supabase
-        .from('daily_deal_flow')
-        .select('*')
-        .order('date', { ascending: false })
-        .order('created_at', { ascending: false });
+      const lawyerLeadsQuery = supabase as unknown as {
+        from: (table: string) => {
+          select: (columns: string) => {
+            eq: (column: string, value: string) => {
+              order: (column: string, options: { ascending: boolean }) => Promise<{ data: any[] | null; error: any }>;
+            };
+          };
+        };
+      };
 
-      if (dateFilter) {
-        transfersQuery = transfersQuery.eq('date', dateFilter);
-      }
+      const lawyerLeadsCountQuery = supabase as unknown as {
+        from: (table: string) => {
+          select: (columns: string, options: { count: string; head: boolean }) => {
+            eq: (column: string, value: string) => Promise<{ count: number | null; error: any }>;
+          };
+        };
+      };
 
       const [transfersRes, transfersCountRes] = await Promise.all([
-        transfersQuery,
-        supabase
-          .from('daily_deal_flow')
-          .select('*', { count: 'exact', head: true }),
+        lawyerLeadsQuery
+          .from('lawyer_leads')
+          .select('*')
+          .eq('pipeline_name', 'cold_call_pipeline')
+          .order('created_at', { ascending: false }),
+        lawyerLeadsCountQuery
+          .from('lawyer_leads')
+          .select('*', { count: 'exact', head: true })
+          .eq('pipeline_name', 'cold_call_pipeline'),
       ]);
 
       if (transfersRes.error) {
@@ -246,33 +226,12 @@ const TransferPortalPage = () => {
 
       setAllTimeTransfers(transfersCountRes.count ?? 0);
 
-      const transferRows = ((transfersRes.data ?? []) as unknown as TransferPortalRow[]).map((row) => {
-        const isCallback = Boolean((row as any).from_callback) || Boolean((row as any).is_callback);
-        return {
-          ...row,
-          source_type: isCallback ? 'callback' : 'zapier',
-        };
-      });
+      const transferRows = ((transfersRes.data ?? []) as unknown as TransferPortalRow[]);
 
-      const transferStageStatuses = new Set<string>(kanbanStages.map((s) => (s.label || '').trim()).filter(Boolean));
-      const submissionStatuses = new Set<string>(['Pending Approval', ...submissionPortalStageLabels]);
-      const transferPortalOnlyRows = transferRows.filter((row) => {
-        const status = (row.status || '').trim();
-        if (!status) return true;
-        if (transferStageStatuses.has(status)) return true;
-        return !submissionStatuses.has(status);
-      });
+      setData(transferRows);
 
-      setData(transferPortalOnlyRows);
-
-      const rowsForCounts = sourceTypeFilter === "__ALL__"
-        ? transferPortalOnlyRows
-        : transferPortalOnlyRows.filter((row) => row.source_type === sourceTypeFilter);
-
-      setData(rowsForCounts);
-
-      // Fetch aggregated note counts (lead_notes + legacy notes fields)
-      fetchNoteCounts(rowsForCounts);
+      // Fetch aggregated note counts
+      fetchNoteCounts(transferRows);
 
       if (showRefreshToast) {
         toast({
@@ -297,7 +256,7 @@ const TransferPortalPage = () => {
   useEffect(() => {
     setFilteredData(applyFilters(data));
     setCurrentPage(1); // Reset to first page when filters change
-  }, [data, dateFilter, sourceTypeFilter, leadVendorFilter, showDuplicates, searchTerm]);
+  }, [data, showDuplicates, searchTerm]);
 
   // Pagination calculations
   const stageFilteredData = useMemo(() => {
@@ -310,19 +269,11 @@ const TransferPortalPage = () => {
   const endIndex = startIndex + itemsPerPage;
   const currentPageData = stageFilteredData.slice(startIndex, endIndex);
 
-  const zapierTransfers = useMemo(
-    () => stageFilteredData.filter((row) => row.source_type === 'zapier').length,
-    [stageFilteredData]
-  );
-
-  const callbackTransfers = useMemo(
-    () => stageFilteredData.filter((row) => row.source_type === 'callback').length,
-    [stageFilteredData]
-  );
 
   const handleOpenEdit = (row: TransferPortalRow) => {
     setEditRow(row);
-    setEditStage((row.status || '').trim() || kanbanStages[0].label);
+    const currentStage = dbTransferStages.find(s => s.id === row.stage_id);
+    setEditStage(currentStage?.label || kanbanStages[0].label);
     setEditNotes('');
     setEditStageOpen(false);
     setEditOpen(true);
@@ -330,7 +281,7 @@ const TransferPortalPage = () => {
 
   const handleView = (row: TransferPortalRow) => {
     if (!row?.id) return;
-    navigate(`/daily-deal-flow/lead/${encodeURIComponent(row.id)}`, {
+    navigate(`/lead-detail/${encodeURIComponent(row.id)}`, {
       state: { activeNav: '/transfer-portal' },
     });
   };
@@ -344,18 +295,29 @@ const TransferPortalPage = () => {
   const handleSaveEdit = async () => {
     if (!editRow) return;
 
-    const nextStage = normalizeSubmissionTransitionStatus((editStage || '').trim());
+    const nextStageLabel = normalizeSubmissionTransitionStatus((editStage || '').trim());
+    if (!nextStageLabel) return;
+
+    const nextStage = dbTransferStages.find(s => s.label === nextStageLabel);
     if (!nextStage) return;
 
-    const previousStage = (editRow.status || '').trim();
-    const stageChanged = previousStage !== nextStage;
+    const previousStageId = editRow.stage_id || '';
+    const stageChanged = previousStageId !== nextStage.id;
 
     try {
       setEditSaving(true);
 
-      const { error } = await supabase
-        .from('daily_deal_flow')
-        .update({ status: nextStage, notes: editNotes })
+      const lawyerLeadsUpdate = supabase as unknown as {
+        from: (table: string) => {
+          update: (data: { stage_id: string; additional_notes: string }) => {
+            eq: (column: string, value: string) => Promise<{ error: any }>;
+          };
+        };
+      };
+
+      const { error } = await lawyerLeadsUpdate
+        .from('lawyer_leads')
+        .update({ stage_id: nextStage.id, additional_notes: editNotes })
         .eq('id', editRow.id);
 
       if (error) {
@@ -424,12 +386,12 @@ const TransferPortalPage = () => {
           const { error: slackError } = await supabase.functions.invoke('disposition-change-slack-alert', {
             body: {
               leadId: editRow.id,
-              submissionId: (editRow as any).submission_id ?? null,
-              leadVendor: editRow.lead_vendor ?? '',
-              insuredName: editRow.insured_name ?? null,
-              clientPhoneNumber: editRow.client_phone_number ?? null,
-              previousDisposition: editRow.status ?? null,
-              newDisposition: nextStage,
+              submissionId: editRow.submission_id ?? null,
+              leadVendor: editRow.firm_name ?? '',
+              insuredName: editRow.lawyer_full_name ?? null,
+              clientPhoneNumber: editRow.phone_number ?? null,
+              previousDisposition: previousStageId ?? null,
+              newDisposition: nextStage.id,
               notes: notesText,
               noteOnly: !stageChanged,
             },
@@ -447,8 +409,8 @@ const TransferPortalPage = () => {
           row.id === editRow.id
             ? {
                 ...row,
-                status: nextStage,
-                notes: editNotes,
+                stage_id: nextStage.id,
+                additional_notes: editNotes,
               }
             : row
         )
@@ -549,14 +511,14 @@ const TransferPortalPage = () => {
       console.warn('Failed to fetch lead note counts', e);
     }
 
-    // Legacy notes on daily_deal_flow
+    // Legacy notes on lawyer_leads.additional_notes
     rows.forEach((r) => {
-      if ((r.notes || '').trim()) {
+      if ((r.additional_notes || '').trim()) {
         counts[r.id] = (counts[r.id] || 0) + 1;
       }
     });
 
-    // Legacy notes on leads.additional_notes via submission_id
+    // Legacy notes on leads.additional_notes via submission_id (if needed)
     const submissionIds = Array.from(submissionMap.keys());
     if (submissionIds.length > 0) {
       try {
@@ -599,30 +561,39 @@ const TransferPortalPage = () => {
   };
 
   const handleDropToStage = async (rowId: string, stageKey: string) => {
-    const nextStatus = normalizeSubmissionTransitionStatus(getStatusForStage(stageKey));
+    const stage = dbTransferStages.find(s => s.key === stageKey);
+    if (!stage) return;
 
     const prev = data;
-    const next = prev.map((r) => (r.id === rowId ? { ...r, status: nextStatus } : r));
+    const next = prev.map((r) => (r.id === rowId ? { ...r, stage_id: stage.id } : r));
     setData(next);
 
     try {
-      const { error } = await supabase
-        .from('daily_deal_flow')
-        .update({ status: nextStatus })
+      const lawyerLeadsUpdate = supabase as unknown as {
+        from: (table: string) => {
+          update: (data: { stage_id: string }) => {
+            eq: (column: string, value: string) => Promise<{ error: any }>;
+          };
+        };
+      };
+
+      const { error } = await lawyerLeadsUpdate
+        .from('lawyer_leads')
+        .update({ stage_id: stage.id })
         .eq('id', rowId);
 
       if (error) throw error;
 
       toast({
         title: 'Status Updated',
-        description: `Transfer updated to "${nextStatus}"`,
+        description: `Lead updated to "${stage.label}"`,
       });
     } catch (e) {
-      console.error('Error updating transfer status:', e);
+      console.error('Error updating lead status:', e);
       setData(prev);
       toast({
         title: 'Error',
-        description: 'Failed to update transfer status',
+        description: 'Failed to update lead status',
         variant: 'destructive',
       });
     }
@@ -640,47 +611,32 @@ const TransferPortalPage = () => {
 
     const headers = [
       'Submission ID',
-      'Date',
-      'Customer Name',
-      'Lead Vendor',
+      'Lawyer Name',
       'Phone Number',
-      'Buffer Agent',
-      'Agent',
-      'Licensed Agent',
-      'Status',
-      'Call Result',
-      'Carrier',
-      'Product Type',
-      'Draft Date',
-      'Monthly Premium',
-      'Face Amount',
-      'From Callback',
-      'Source Type',
+      'Email',
+      'Firm Name',
+      'Firm Address',
+      'Stage',
+      'Submission Date',
       'Created At'
     ];
 
     const csvContent = [
       headers.join(','),
-      ...stageFilteredData.map(row => [
-        row.submission_id,
-        row.date || '',
-        row.insured_name || '',
-        row.lead_vendor || '',
-        row.client_phone_number || '',
-        row.buffer_agent || '',
-        row.agent || '',
-        row.licensed_agent_account || '',
-        row.status || '',
-        row.call_result || '',
-        row.carrier || '',
-        row.product_type || '',
-        row.draft_date || '',
-        row.monthly_premium || '',
-        row.face_amount || '',
-        row.from_callback ? 'Yes' : 'No',
-        row.source_type || '',
-        row.created_at || ''
-      ].map(field => `"${field}"`).join(','))
+      ...stageFilteredData.map(row => {
+        const currentStage = dbTransferStages.find(s => s.id === row.stage_id);
+        return [
+          row.submission_id,
+          row.lawyer_full_name || '',
+          row.phone_number || '',
+          row.email || '',
+          row.firm_name || '',
+          row.firm_address || '',
+          currentStage?.label || '',
+          row.submission_date || '',
+          row.created_at || ''
+        ].map(field => `"${field}"`).join(',');
+      })
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -712,7 +668,7 @@ const TransferPortalPage = () => {
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-7xl mx-auto space-y-6">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-1">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -722,28 +678,6 @@ const TransferPortalPage = () => {
               <CardContent className="flex items-center justify-between">
                 <div className="text-3xl font-semibold">{allTimeTransfers}</div>
                 <ArrowLeftRight className="h-10 w-10 text-primary" />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Zapier Transfers
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="flex items-center justify-between">
-                <div className="text-3xl font-semibold">{zapierTransfers}</div>
-                <Users className="h-10 w-10 text-primary" />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Callback Transfers
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="flex items-center justify-between">
-                <div className="text-3xl font-semibold">{callbackTransfers}</div>
-                <Users className="h-10 w-10 text-primary" />
               </CardContent>
             </Card>
           </div>
@@ -756,22 +690,6 @@ const TransferPortalPage = () => {
                 placeholder="Search transfers..."
                 className="w-56"
               />
-
-              <Select value={leadVendorFilter} onValueChange={(value) => setLeadVendorFilter(value)}>
-                <SelectTrigger className="w-44">
-                  <SelectValue placeholder="All Vendors" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="__ALL__">All Vendors</SelectItem>
-                    {leadVendorOptions.map((vendor) => (
-                      <SelectItem key={vendor} value={vendor}>
-                        {vendor}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
 
               <Select value={selectedStage} onValueChange={(value) => {
                 setSelectedStage(value);
@@ -820,59 +738,6 @@ const TransferPortalPage = () => {
             </div>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm text-muted-foreground">
-                Track all daily lead transfers from Zapier and callbacks
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                <div>
-                  <label className="block text-xs font-semibold uppercase text-muted-foreground">
-                    Date
-                  </label>
-                  <Input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold uppercase text-muted-foreground">
-                    Source Type
-                  </label>
-                  <Select value={sourceTypeFilter} onValueChange={(value) => setSourceTypeFilter(value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="All Sources" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        <SelectItem value="__ALL__">All Sources</SelectItem>
-                        <SelectItem value="zapier">Zapier</SelectItem>
-                        <SelectItem value="callback">Callback</SelectItem>
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold uppercase text-muted-foreground">
-                    Show Duplicates
-                  </label>
-                  <Select
-                    value={showDuplicates ? "true" : "false"}
-                    onValueChange={(value) => setShowDuplicates(value === "true")}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        <SelectItem value="true">Show All Records</SelectItem>
-                        <SelectItem value="false">Remove Duplicates</SelectItem>
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
 
           {viewMode === "kanban" ? (
             <div className="mt-4 min-h-0 flex-1 overflow-auto" onDragOver={handleKanbanDragOver}>
@@ -947,9 +812,9 @@ const TransferPortalPage = () => {
                                 </Button>
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="min-w-0">
-                                    <div className="truncate text-sm font-semibold">{row.insured_name || "Unnamed"}</div>
+                                    <div className="truncate text-sm font-semibold">{row.lawyer_full_name || "Unnamed"}</div>
                                     <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-                                      <span>{row.client_phone_number || "N/A"}</span>
+                                      <span>{row.phone_number || "N/A"}</span>
                                       <div className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px]">
                                         <StickyNote className="h-3.5 w-3.5" />
                                         <span>{noteCounts[row.id] ?? 0}</span>
@@ -958,8 +823,8 @@ const TransferPortalPage = () => {
                                   </div>
                                 </div>
                                 <div className="mt-2 flex items-center justify-between gap-2">
-                                  <Badge variant="secondary" className="text-xs">{row.lead_vendor || "Unknown"}</Badge>
-                                  <div className="text-xs text-muted-foreground">{row.date || ""}</div>
+                                  <Badge variant="secondary" className="text-xs">{row.firm_name || "No Firm"}</Badge>
+                                  <div className="text-xs text-muted-foreground">{row.submission_date ? new Date(row.submission_date).toLocaleDateString() : ""}</div>
                                 </div>
                               </CardContent>
                             </Card>
@@ -1024,35 +889,36 @@ const TransferPortalPage = () => {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b bg-muted/40 text-left text-xs uppercase text-muted-foreground">
-                          <th className="px-4 py-3">Client</th>
+                          <th className="px-4 py-3">Lawyer Name</th>
                           <th className="px-4 py-3">Phone</th>
+                          <th className="px-4 py-3">Firm</th>
                           <th className="px-4 py-3">Stage</th>
-                          <th className="px-4 py-3">Publisher</th>
-                          <th className="px-4 py-3">Date</th>
+                          <th className="px-4 py-3">Submission Date</th>
                           <th className="px-4 py-3 text-right">Action</th>
                         </tr>
                       </thead>
                       <tbody>
                         {currentPageData.map((row) => {
                           const stageKey = deriveStageKey(row);
-                          const stageLabel = (row.status || '').trim() || kanbanStages.find((stage) => stage.key === stageKey)?.label;
+                          const currentStage = dbTransferStages.find(s => s.id === row.stage_id);
+                          const stageLabel = currentStage?.label || kanbanStages.find((stage) => stage.key === stageKey)?.label;
                           return (
                             <tr key={row.id} className="border-b last:border-0">
-                              <td className="px-4 py-3">{row.insured_name || "Unnamed"}</td>
+                              <td className="px-4 py-3">{row.lawyer_full_name || "Unnamed"}</td>
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-2">
-                                  <span>{row.client_phone_number || "N/A"}</span>
+                                  <span>{row.phone_number || "N/A"}</span>
                                   <div className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px]">
                                     <StickyNote className="h-3.5 w-3.5" />
                                     <span>{noteCounts[row.id] ?? 0}</span>
                                   </div>
                                 </div>
                               </td>
+                              <td className="px-4 py-3">{row.firm_name || "No Firm"}</td>
                               <td className="px-4 py-3">
                                 <Badge variant="outline">{stageLabel}</Badge>
                               </td>
-                              <td className="px-4 py-3">{row.lead_vendor || "Unknown"}</td>
-                              <td className="px-4 py-3">{row.date || ""}</td>
+                              <td className="px-4 py-3">{row.submission_date ? new Date(row.submission_date).toLocaleDateString() : ""}</td>
                               <td className="px-4 py-3 text-right">
                                 <Button
                                   type="button"

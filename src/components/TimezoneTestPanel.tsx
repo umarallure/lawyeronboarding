@@ -90,7 +90,7 @@ export const TimezoneTestPanel: React.FC = () => {
               <li>Verify <code>getCurrentTimestampEST</code> shows correct EST time</li>
               <li>Compare manual EST/EDT calculations with utility functions</li>
               <li>Test during DST transition periods (March/November)</li>
-              <li>Test creating new entries in Daily Deal Flow page</li>
+              <li>Test creating new entries in Daily Outreach Report page</li>
               <li>Test date filtering to ensure consistency</li>
             </ol>
           </div>

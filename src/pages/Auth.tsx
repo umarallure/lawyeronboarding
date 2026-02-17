@@ -94,14 +94,10 @@ const Auth = () => {
           <div className="hidden lg:flex flex-col justify-center h-full space-y-8 pr-10">
             <div className="space-y-4">
               <h1 className="text-5xl font-bold tracking-tight text-foreground leading-[1.1]">
-                Manage lawyer onboarding with <br />
-                {/* Gradient adjusted to primary → black */}
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-black">
-                  precision & speed.
-                </span>
+                Lawyer Acquisition Portal <br />
               </h1>
               <p className="text-lg text-muted-foreground max-w-md leading-relaxed">
-                Your command center for lawyer onboarding operations. Access real-time analytics, manage workflows, and track progress in one secure workspace.
+                Your command center for lawyer acquisition operations. Access real-time analytics, manage workflows, and track progress in one secure workspace.
               </p>
             </div>
 

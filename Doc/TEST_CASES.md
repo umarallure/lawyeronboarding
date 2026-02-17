@@ -5,7 +5,7 @@ These test cases validate the simplified call result update system with two call
 
 ## Test Scenarios
 
-### Scenario 1: BPO Transfer - New Entry (No existing Daily Deal Flow entry)
+### Scenario 1: BPO Transfer - New Entry (No existing Daily Outreach Report entry)
 **Input:**
 - Submission ID: `SUB001`
 - Call Source: `BPO Transfer`
@@ -19,7 +19,7 @@ These test cases validate the simplified call result update system with two call
 - Should create NEW entry in daily_deal_flow with CBB prefix: `CBB1234SUB001`
 - Should create new Google Sheets entry with CBB submission ID
 - Should send Slack notification for submitted application
-- Daily Deal Flow entry should have today's date
+- Daily Outreach Report entry should have today's date
 
 **Database Verification:**
 ```sql
@@ -50,7 +50,7 @@ SELECT * FROM daily_deal_flow WHERE submission_id = 'SUB002' AND date = CURRENT_
 
 ---
 
-### Scenario 3: Agent Callback - New Entry (No existing Daily Deal Flow entry for today)
+### Scenario 3: Agent Callback - New Entry (No existing Daily Outreach Report entry for today)
 **Input:**
 - Submission ID: `SUB003`
 - Call Source: `Agent Callback`
@@ -136,7 +136,7 @@ SELECT * FROM daily_deal_flow WHERE submission_id LIKE 'CBB%SUB005' AND status =
 
 ## Database Schema Validation
 
-### Daily Deal Flow Entry Fields:
+### Daily Outreach Report Entry Fields:
 - `submission_id`: Should be either original or CBB prefixed
 - `date`: Should be today's date for new entries
 - `from_callback`: Should be `true` for Agent Callback, `false` for BPO Transfer

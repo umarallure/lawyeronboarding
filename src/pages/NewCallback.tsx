@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,41 +7,53 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
-import { format } from "date-fns";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { getCurrentTimestampEST, formatDateToEST } from "@/lib/dateUtils";
-import { useCenters } from "@/hooks/useCenters";
+import { formatDateToEST } from "@/lib/dateUtils";
+import { useAuth } from "@/hooks/useAuth";
+import { usePipelineStages } from "@/hooks/usePipelineStages";
 
 const NewCallback = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { leadVendors, loading: centersLoading } = useCenters();
+  const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedPipeline, setSelectedPipeline] = useState<string>("cold_call_pipeline");
+  const { stages: portalStages, loading: stagesLoading } = usePipelineStages(selectedPipeline);
 
   // Form state
-  const [customerFullName, setCustomerFullName] = useState("");
+  const [lawyerFullName, setLawyerFullName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [email, setEmail] = useState("");
   const [streetAddress, setStreetAddress] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [zipCode, setZipCode] = useState("");
-  const [dateOfBirth, setDateOfBirth] = useState<Date>();
-  const [age, setAge] = useState("");
-  const [socialSecurity, setSocialSecurity] = useState("");
-  const [healthConditions, setHealthConditions] = useState("");
-  const [leadVendor, setLeadVendor] = useState("");
+  const [firmName, setFirmName] = useState("");
+  const [firmAddress, setFirmAddress] = useState("");
+  const [firmPhoneNo, setFirmPhoneNo] = useState("");
+  const [profileDescription, setProfileDescription] = useState("");
   const [additionalNotes, setAdditionalNotes] = useState("");
-  const [submissionDate, setSubmissionDate] = useState<Date>();
+  const [stageId, setStageId] = useState<string>("");
   
   // Generate unique submission ID
   const generateSubmissionId = () => {
     const timestamp = Date.now();
     const random = Math.floor(Math.random() * 1000000);
-    return `CB${timestamp}${random}`;
+    return `LL${timestamp}${random}`;
   };
+
+  const activeStages = portalStages.filter((stage) => stage.is_active);
+
+  useEffect(() => {
+    if (activeStages.length > 0) {
+      const defaultStage = activeStages[0];
+      if (defaultStage?.id) {
+        setStageId(defaultStage.id);
+      }
+    }
+  }, [activeStages]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,46 +61,73 @@ const NewCallback = () => {
 
     try {
       // Validate required fields
-      if (!customerFullName || !phoneNumber || !leadVendor || !submissionDate) {
+      if (!lawyerFullName || !phoneNumber) {
         toast({
           title: "Validation Error",
-          description: "Please fill in all required fields (Name, Phone, Lead Vendor, Submission Date)",
+          description: "Please fill in all required fields (Name, Phone)",
           variant: "destructive",
         });
         return;
       }
 
       const submissionId = generateSubmissionId();
-      
-      const leadData = {
+
+      const leadData: {
+        user_id: string | null;
+        pipeline_name: string | null;
+        stage_id: string | null;
+        submission_id: string;
+        submission_date: string | null;
+        lawyer_full_name: string;
+        firm_name: string | null;
+        firm_address: string | null;
+        firm_phone_no: string | null;
+        profile_description: string | null;
+        phone_number: string;
+        email: string | null;
+        street_address: string | null;
+        city: string | null;
+        state: string | null;
+        zip_code: string | null;
+        additional_notes: string | null;
+      } = {
+        user_id: user?.id ?? null,
+        pipeline_name: selectedPipeline,
+        stage_id: stageId || null,
         submission_id: submissionId,
-        submission_date: formatDateToEST(submissionDate), // Using selected submission date
-        customer_full_name: customerFullName,
+        submission_date: formatDateToEST(new Date()),
+        lawyer_full_name: lawyerFullName,
+        firm_name: firmName || null,
+        firm_address: firmAddress || null,
+        firm_phone_no: firmPhoneNo || null,
+        profile_description: profileDescription || null,
         phone_number: phoneNumber,
         email: email || null,
         street_address: streetAddress || null,
         city: city || null,
         state: state || null,
         zip_code: zipCode || null,
-        date_of_birth: dateOfBirth ? formatDateToEST(dateOfBirth) : null, // Using EST formatting
-        age: age ? parseInt(age) : null,
-        social_security: socialSecurity || null,
-        health_conditions: healthConditions || null,
-        lead_vendor: leadVendor,
         additional_notes: additionalNotes || null,
-        is_callback: true, // Mark as callback since submission ID starts with CB
       };
 
-      // Insert into leads table
-      const { error: insertError } = await supabase
-        .from("leads")
-        .insert(leadData);
+      // Insert into lawyer_leads table
+      const supabaseLeads = supabase as unknown as {
+        from: (table: string) => {
+          insert: (
+            data: typeof leadData[]
+          ) => Promise<{ error: unknown }>;
+        };
+      };
+
+      const { error: insertError } = await supabaseLeads
+        .from("lawyer_leads")
+        .insert([leadData]);
 
       if (insertError) {
         console.error("Error creating lead:", insertError);
         toast({
           title: "Error",
-          description: "Failed to create new callback entry",
+          description: "Failed to create new lead entry",
           variant: "destructive",
         });
         return;
@@ -96,15 +135,10 @@ const NewCallback = () => {
 
       toast({
         title: "Success",
-        description: "New callback entry created successfully",
+        description: "New lead created successfully",
       });
 
-      // Navigate to call result update form
-      const params = new URLSearchParams({
-        submissionId,
-        fromCallback: "true",
-      });
-      navigate(`/call-result-update?${params.toString()}`);
+      navigate("/leads");
 
     } catch (error) {
       console.error("Error:", error);
@@ -131,9 +165,9 @@ const NewCallback = () => {
             Back to Dashboard
           </Button>
           <div>
-            <h1 className="text-3xl font-bold">New Callback</h1>
+            <h1 className="text-3xl font-bold">New Lead</h1>
             <p className="text-muted-foreground mt-1">
-              Create a new callback entry manually
+              Create a new lead entry manually
             </p>
           </div>
         </div>
@@ -150,11 +184,11 @@ const NewCallback = () => {
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="customerFullName">Customer Full Name *</Label>
+                    <Label htmlFor="lawyerFullName">Lawyer Full Name *</Label>
                     <Input
-                      id="customerFullName"
-                      value={customerFullName}
-                      onChange={(e) => setCustomerFullName(e.target.value)}
+                      id="lawyerFullName"
+                      value={lawyerFullName}
+                      onChange={(e) => setLawyerFullName(e.target.value)}
                       placeholder="Enter full name"
                       required
                     />
@@ -171,29 +205,43 @@ const NewCallback = () => {
                     />
                   </div>
 
-                  <div className="md:col-span-2">
-                    <Label htmlFor="leadVendor">Lead Vendor *</Label>
-                    <Select value={leadVendor} onValueChange={setLeadVendor} required>
+                  <div>
+                    <Label htmlFor="firmName">Firm Name</Label>
+                    <Input
+                      id="firmName"
+                      value={firmName}
+                      onChange={(e) => setFirmName(e.target.value)}
+                      placeholder="Firm name"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="pipeline">Pipeline *</Label>
+                    <Select value={selectedPipeline} onValueChange={setSelectedPipeline}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select lead vendor" />
+                        <SelectValue placeholder="Select pipeline" />
                       </SelectTrigger>
                       <SelectContent>
-                        {leadVendors.map((vendor) => (
-                          <SelectItem key={vendor} value={vendor}>
-                            {vendor}
-                          </SelectItem>
-                        ))}
+                        <SelectItem value="cold_call_pipeline">Cold Call Pipeline</SelectItem>
+                        <SelectItem value="submission_portal">Submission Portal</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
-                  <div className="md:col-span-2">
-                    <Label>Submission Date *</Label>
-                    <DatePicker
-                      date={submissionDate}
-                      onDateChange={setSubmissionDate}
-                      placeholder="Pick a submission date"
-                    />
+                  <div>
+                    <Label htmlFor="stage">Stage</Label>
+                    <Select value={stageId} onValueChange={setStageId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder={stagesLoading ? "Loading stages..." : "Select stage"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {activeStages.map((stage) => (
+                          <SelectItem key={stage.id} value={stage.id}>
+                            {stage.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </div>
@@ -253,52 +301,40 @@ const NewCallback = () => {
                       placeholder="12345"
                     />
                   </div>
+
+                  <div>
+                    <Label htmlFor="firmPhone">Firm Phone</Label>
+                    <Input
+                      id="firmPhone"
+                      value={firmPhoneNo}
+                      onChange={(e) => setFirmPhoneNo(e.target.value)}
+                      placeholder="(555) 555-5555"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <Label htmlFor="firmAddress">Firm Address</Label>
+                    <Input
+                      id="firmAddress"
+                      value={firmAddress}
+                      onChange={(e) => setFirmAddress(e.target.value)}
+                      placeholder="Firm address"
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* Personal Information */}
+              {/* Profile Information */}
               <div className="space-y-4 p-4 border rounded-lg bg-gray-50">
-                <h3 className="font-semibold text-gray-800">Personal Information</h3>
+                <h3 className="font-semibold text-gray-800">Profile Information</h3>
                 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <Label>Date of Birth</Label>
-                    <DatePicker
-                      date={dateOfBirth}
-                      onDateChange={setDateOfBirth}
-                      placeholder="Pick a date"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="age">Age</Label>
-                    <Input
-                      id="age"
-                      type="number"
-                      value={age}
-                      onChange={(e) => setAge(e.target.value)}
-                      placeholder="35"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="socialSecurity">Social Security</Label>
-                    <Input
-                      id="socialSecurity"
-                      value={socialSecurity}
-                      onChange={(e) => setSocialSecurity(e.target.value)}
-                      placeholder="XXX-XX-XXXX"
-                    />
-                  </div>
-                </div>
-
                 <div>
-                  <Label htmlFor="healthConditions">Health Conditions</Label>
+                  <Label htmlFor="profileDescription">Profile Description</Label>
                   <Textarea
-                    id="healthConditions"
-                    value={healthConditions}
-                    onChange={(e) => setHealthConditions(e.target.value)}
-                    placeholder="Any relevant health conditions..."
+                    id="profileDescription"
+                    value={profileDescription}
+                    onChange={(e) => setProfileDescription(e.target.value)}
+                    placeholder="Brief profile description..."
                     rows={3}
                   />
                 </div>
@@ -334,7 +370,7 @@ const NewCallback = () => {
                       Creating...
                     </>
                   ) : (
-                    "Create Callback"
+                    "Create Lead"
                   )}
                 </Button>
               </div>

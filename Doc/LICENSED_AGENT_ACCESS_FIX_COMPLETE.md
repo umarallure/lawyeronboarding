@@ -82,7 +82,7 @@ const shouldShowNavigation =
     {isAuthorizedUser && (
       <>
         <DropdownMenuLabel>Lead Management</DropdownMenuLabel>
-        {/* Daily Deal Flow, Transfer Portal, etc. */}
+        {/* Daily Outreach Report, Transfer Portal, etc. */}
       </>
     )}
   </DropdownMenu>

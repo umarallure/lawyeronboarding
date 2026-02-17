@@ -6,7 +6,7 @@
 **Before:** 3 options (`First Time Transfer`, `Reconnected Transfer`, `Agent Callback`)
 **After:** 2 options (`BPO Transfer`, `Agent Callback`)
 
-### 2. **Unified Daily Deal Flow Logic**
+### 2. **Unified Daily Outreach Report Logic**
 **New Behavior:**
 - **If entry exists for today:** Update existing entry (regardless of call source)
 - **If no entry exists for today:** Create new entry with `CBB` prefix
@@ -42,7 +42,7 @@
 
 ## 📊 **Database Schema Impact**
 
-### **Daily Deal Flow Table:**
+### **Daily Outreach Report Table:**
 - `submission_id`: Either original ID or `CBB` prefixed ID
 - `from_callback`: `true` for Agent Callback, `false` for BPO Transfer
 - `is_callback`: `true` for entries with `CBB` prefix

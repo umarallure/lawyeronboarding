@@ -1,4 +1,4 @@
-# Call Result to Daily Deal Flow Auto-Update System
+# Call Result to Daily Outreach Report Auto-Update System
 
 ## Overview
 This system automatically updates the `daily_deal_flow` table with call result information whenever a call result is saved or updated in the `call_results` table using PostgreSQL triggers and functions.
@@ -182,7 +182,7 @@ CREATE TRIGGER trigger_update_daily_deal_flow_from_call_result
 1. **Agent Submits Call Result Form** (CallResultForm.tsx)
 2. **Call Result Saved** to `call_results` table
 3. **Database Trigger Fires** (automatic, immediate)
-4. **Daily Deal Flow Updated** with mapped values
+4. **Daily Outreach Report Updated** with mapped values
 5. **Status & Call Result** properly categorized
 6. **Other Workflows Continue** (Google Sheets, Slack notifications, etc.)
 
@@ -205,7 +205,7 @@ CREATE TRIGGER trigger_update_daily_deal_flow_from_call_result
 ## Integration with Existing System
 
 This trigger works in conjunction with:
-1. **Lead to Daily Deal Flow Trigger**: Creates initial daily_deal_flow entries
+1. **Lead to Daily Outreach Report Trigger**: Creates initial daily_deal_flow entries
 2. **CallResultForm Component**: Frontend form that saves to call_results table
 3. **Google Sheets Sync**: Continues to work as before
 4. **Slack Notifications**: Continues to work as before
