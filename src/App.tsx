@@ -76,7 +76,7 @@ const App = () => (
               path="/leads" 
               element={
                 <ProtectedRoute>
-                  <AppShell title="Leads">
+                  <AppShell title="Lawyers">
                     <Leads />
                   </AppShell>
                 </ProtectedRoute>
@@ -189,7 +189,7 @@ const App = () => (
               path="/new-callback" 
               element={
                 <ProtectedRoute>
-                  <AppShell title="New Callback">
+                  <AppShell title="New Lawyer">
                     <NewCallback />
                   </AppShell>
                 </ProtectedRoute>
