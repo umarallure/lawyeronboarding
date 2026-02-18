@@ -17,7 +17,7 @@ type CenterCreateLeadModalProps = {
   leadVendor: string;
 };
 
-type LeadFormData = {
+type LawyerFormData = {
   customer_full_name: string;
   phone_number: string;
   street_address: string;
@@ -63,7 +63,7 @@ const US_STATES = [
 export const CenterCreateLeadModal = ({ open, onClose, onLeadCreated, leadVendor }: CenterCreateLeadModalProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState<LeadFormData>({
+  const [formData, setFormData] = useState<LawyerFormData>({
     customer_full_name: '',
     phone_number: '',
     street_address: '',
@@ -103,7 +103,7 @@ export const CenterCreateLeadModal = ({ open, onClose, onLeadCreated, leadVendor
     return `CBB${randomNumber}`;
   };
 
-  const handleInputChange = (field: keyof LeadFormData, value: string) => {
+  const handleInputChange = (field: keyof LawyerFormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
@@ -132,8 +132,8 @@ export const CenterCreateLeadModal = ({ open, onClose, onLeadCreated, leadVendor
     try {
       const submissionId = generateSubmissionId();
       
-      // Prepare the lead data
-      const leadData = {
+      // Prepare the lawyer data
+      const lawyerData = {
         submission_id: submissionId,
         submission_date: new Date().toISOString(),
         customer_full_name: formData.customer_full_name.trim(),
@@ -177,22 +177,22 @@ export const CenterCreateLeadModal = ({ open, onClose, onLeadCreated, leadVendor
 
       const { error } = await supabase
         .from('leads')
-        .insert([leadData]);
+        .insert([lawyerData]);
 
       if (error) throw error;
 
       toast({
         title: "Success",
-        description: `Lead created successfully! Submission ID: ${submissionId}`,
+        description: `Lawyer created successfully! Submission ID: ${submissionId}`,
       });
 
       onLeadCreated();
       handleClose();
     } catch (error: any) {
-      console.error('Error creating lead:', error);
+      console.error('Error creating lawyer:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to create lead. Please try again.",
+        description: error.message || "Failed to create lawyer. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -241,11 +241,11 @@ export const CenterCreateLeadModal = ({ open, onClose, onLeadCreated, leadVendor
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh]">
+      <DialogContent className="max-w-4xl max-h-[90vh] w-[95vw] sm:w-full">
         <DialogHeader>
-          <DialogTitle>Create New Lead</DialogTitle>
+          <DialogTitle>Create New Lawyer</DialogTitle>
           <DialogDescription>
-            Fill in the lead information. Fields marked with * are required.
+            Fill in the lawyer information. Fields marked with * are required.
             <br />
             <span className="text-sm text-muted-foreground">Lead Vendor: <span className="font-semibold">{leadVendor}</span></span>
           </DialogDescription>
@@ -253,7 +253,7 @@ export const CenterCreateLeadModal = ({ open, onClose, onLeadCreated, leadVendor
 
         <ScrollArea className="h-[60vh] pr-4">
           <Tabs defaultValue="basic" className="w-full">
-            <TabsList className="grid w-full grid-cols-5">
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5">
               <TabsTrigger value="basic">Basic Info</TabsTrigger>
               <TabsTrigger value="personal">Personal</TabsTrigger>
               <TabsTrigger value="insurance">Insurance</TabsTrigger>
@@ -263,7 +263,7 @@ export const CenterCreateLeadModal = ({ open, onClose, onLeadCreated, leadVendor
 
             {/* Basic Information Tab */}
             <TabsContent value="basic" className="space-y-4 mt-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="customer_full_name">Customer Full Name *</Label>
                   <Input
@@ -334,7 +334,7 @@ export const CenterCreateLeadModal = ({ open, onClose, onLeadCreated, leadVendor
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="city">City</Label>
                   <Input
@@ -371,7 +371,7 @@ export const CenterCreateLeadModal = ({ open, onClose, onLeadCreated, leadVendor
 
             {/* Personal Information Tab */}
             <TabsContent value="personal" className="space-y-4 mt-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="birth_state">Birth State</Label>
                   <Select value={formData.birth_state} onValueChange={(value) => handleInputChange('birth_state', value)}>
@@ -439,7 +439,7 @@ export const CenterCreateLeadModal = ({ open, onClose, onLeadCreated, leadVendor
 
             {/* Insurance Information Tab */}
             <TabsContent value="insurance" className="space-y-4 mt-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="carrier">Carrier</Label>
                   <Input
@@ -575,7 +575,7 @@ export const CenterCreateLeadModal = ({ open, onClose, onLeadCreated, leadVendor
 
             {/* Banking Information Tab */}
             <TabsContent value="banking" className="space-y-4 mt-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="institution_name">Bank Name</Label>
                   <Input
@@ -625,7 +625,7 @@ export const CenterCreateLeadModal = ({ open, onClose, onLeadCreated, leadVendor
             Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={loading}>
-            {loading ? 'Creating...' : 'Create Lead'}
+            {loading ? 'Creating...' : 'Create Lawyer'}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -209,7 +209,7 @@ const App = () => (
               path="/leads/:submissionId" 
               element={
                 <ProtectedRoute>
-                  <AppShell title="Lead Details">
+                  <AppShell title="Lawyer Details">
                     <LeadDetailsPage />
                   </AppShell>
                 </ProtectedRoute>

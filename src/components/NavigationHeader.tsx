@@ -162,7 +162,7 @@ export const NavigationHeader = ({ title, showBackButton = false, backTo }: Navi
       
                     <DropdownMenuItem onClick={() => navigate('/leads')}>
                       <User className="mr-2 h-4 w-4" />
-                      Leads
+                      Lawyers
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                   </>
@@ -174,7 +174,7 @@ export const NavigationHeader = ({ title, showBackButton = false, backTo }: Navi
                     <DropdownMenuLabel>Lead Vendor</DropdownMenuLabel>
                     <DropdownMenuItem onClick={() => navigate('/center-lead-portal')}>
                       <Grid3X3 className="mr-2 h-4 w-4" />
-                      My Leads
+                      My Lawyers
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => navigate('/center-calendar-view')}>
                       <Calendar className="mr-2 h-4 w-4" />

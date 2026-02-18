@@ -165,16 +165,16 @@ const NewCallback = () => {
             Back to Dashboard
           </Button>
           <div>
-            <h1 className="text-3xl font-bold">New Lead</h1>
+            <h1 className="text-3xl font-bold">New Lawyer</h1>
             <p className="text-muted-foreground mt-1">
-              Create a new lead entry manually
+              Add a new lawyer manually
             </p>
           </div>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>Lead Information</CardTitle>
+            <CardTitle>Lawyer Information</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">

@@ -14,7 +14,7 @@ import { Calendar, User, Phone, DollarSign, Edit } from 'lucide-react';
 import { CenterCalendarComponent } from '@/components/CenterCalendarComponent';
 import { PlacementStatusModal } from '@/components/PlacementStatusModal';
 
-type Lead = {
+type Lawyer = {
   id: string;
   submission_id: string;
   customer_full_name: string | null;
@@ -64,13 +64,13 @@ const CenterCalendarView = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const [leads, setLeads] = useState<Lead[]>([]);
+  const [lawyers, setLawyers] = useState<Lawyer[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
-  const [filteredLeads, setFilteredLeads] = useState<Lead[]>([]);
+  const [filteredLawyers, setFilteredLawyers] = useState<Lawyer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedCarrier, setSelectedCarrier] = useState<string>("All Carriers");
   const [modalOpen, setModalOpen] = useState(false);
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [selectedLawyer, setSelectedLawyer] = useState<Lawyer | null>(null);
 
   useEffect(() => {
     console.log('[CenterCalendarView] Auth/Center check:', {
@@ -88,58 +88,58 @@ const CenterCalendarView = () => {
 
   useEffect(() => {
     if (centerInfo && leadVendor) {
-      fetchLeads();
+      fetchLawyers();
     }
   }, [centerInfo, leadVendor]);
 
   useEffect(() => {
     if (selectedDate) {
-      filterLeadsByDate(selectedDate);
+      filterLawyersByDate(selectedDate);
     }
-  }, [selectedDate, leads, selectedCarrier]);
+  }, [selectedDate, lawyers, selectedCarrier]);
 
-  const fetchLeads = async () => {
+  const fetchLawyers = async () => {
     if (!leadVendor) return;
 
     try {
-      const { data: leadsData, error: leadsError } = await supabase
+      const { data: lawyersData, error: lawyersError } = await supabase
         .from('leads')
         .select('id, submission_id, customer_full_name, phone_number, carrier, monthly_premium, coverage_amount, state, created_at, draft_date, submission_date')
         .eq('lead_vendor', leadVendor)
         .order('draft_date', { ascending: false });
 
-      if (leadsError) throw leadsError;
+      if (lawyersError) throw lawyersError;
 
-      // Get status, face_amount, and draft_date from daily_deal_flow for each lead
-      const leadsWithStatus = await Promise.all(
-        (leadsData || []).map(async (lead) => {
+      // Get status, face_amount, and draft_date from daily_deal_flow for each lawyer
+      const lawyersWithStatus = await Promise.all(
+        (lawyersData || []).map(async (lawyer) => {
           const { data: dealFlowData } = await supabase
             .from('daily_deal_flow')
             .select('status, draft_date, face_amount, carrier, placement_status')
-            .eq('submission_id', lead.submission_id)
+            .eq('submission_id', lawyer.submission_id)
             .maybeSingle();
 
           return {
-            ...lead,
+            ...lawyer,
             status: dealFlowData?.status || null,
-            // Use draft_date from daily_deal_flow if available, otherwise use leads table
-            draft_date: dealFlowData?.draft_date || lead.draft_date,
-            // Use face_amount from daily_deal_flow if available, otherwise use coverage_amount from leads
+            // Use draft_date from daily_deal_flow if available, otherwise use lawyers table
+            draft_date: dealFlowData?.draft_date || lawyer.draft_date,
+            // Use face_amount from daily_deal_flow if available, otherwise use coverage_amount from lawyers
             face_amount: dealFlowData?.face_amount || null,
-            // Use carrier from daily_deal_flow if available, otherwise use leads table
-            carrier: dealFlowData?.carrier || lead.carrier,
+            // Use carrier from daily_deal_flow if available, otherwise use lawyers table
+            carrier: dealFlowData?.carrier || lawyer.carrier,
             // Get placement_status from daily_deal_flow
             placement_status: dealFlowData?.placement_status || null,
           };
         })
       );
 
-      setLeads(leadsWithStatus);
+      setLawyers(lawyersWithStatus);
     } catch (error) {
-      console.error('Error fetching leads:', error);
+      console.error('Error fetching lawyers:', error);
       toast({
-        title: "Error fetching leads",
-        description: "Unable to load your leads. Please try again.",
+        title: "Error fetching lawyers",
+        description: "Unable to load your lawyers. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -147,56 +147,56 @@ const CenterCalendarView = () => {
     }
   };
 
-  const filterLeadsByDate = (date: Date) => {
+  const filterLawyersByDate = (date: Date) => {
     const dateString = format(date, 'yyyy-MM-dd');
-    const filtered = leads.filter(lead => {
-      if (!lead.draft_date) return false;
+    const filtered = lawyers.filter(lawyer => {
+      if (!lawyer.draft_date) return false;
       try {
         // Parse date string directly without timezone conversion
-        let leadDraftDate: string;
-        if (typeof lead.draft_date === 'string' && lead.draft_date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        let lawyerDraftDate: string;
+        if (typeof lawyer.draft_date === 'string' && lawyer.draft_date.match(/^\d{4}-\d{2}-\d{2}$/)) {
           // Already in YYYY-MM-DD format, use directly
-          leadDraftDate = lead.draft_date;
+          lawyerDraftDate = lawyer.draft_date;
         } else {
           // Parse and format
-          leadDraftDate = format(new Date(lead.draft_date), 'yyyy-MM-dd');
+          lawyerDraftDate = format(new Date(lawyer.draft_date), 'yyyy-MM-dd');
         }
-        const matchesDate = leadDraftDate === dateString;
+        const matchesDate = lawyerDraftDate === dateString;
         
         // Apply carrier filter
         if (selectedCarrier === "All Carriers") {
           return matchesDate;
         }
-        return matchesDate && lead.carrier === selectedCarrier;
+        return matchesDate && lawyer.carrier === selectedCarrier;
       } catch (error) {
-        // Skip leads with invalid draft_date
+        // Skip lawyers with invalid draft_date
         return false;
       }
     });
-    setFilteredLeads(filtered);
+    setFilteredLawyers(filtered);
   };
 
   const handleDateSelect = (date: Date | undefined) => {
     setSelectedDate(date);
   };
 
-  const handleSendCallback = (lead: Lead) => {
-    navigate(`/center-callback-request?submissionId=${lead.submission_id}`);
+  const handleSendCallback = (lawyer: Lawyer) => {
+    navigate(`/center-callback-request?submissionId=${lawyer.submission_id}`);
   };
 
-  const handleEditPlacementStatus = (lead: Lead) => {
-    setSelectedLead(lead);
+  const handleEditPlacementStatus = (lawyer: Lawyer) => {
+    setSelectedLawyer(lawyer);
     setModalOpen(true);
   };
 
   const handleSavePlacementStatus = async (newStatus: string) => {
-    if (!selectedLead) return;
+    if (!selectedLawyer) return;
 
     try {
       const { error } = await supabase
         .from('daily_deal_flow')
         .update({ placement_status: newStatus })
-        .eq('submission_id', selectedLead.submission_id);
+        .eq('submission_id', selectedLawyer.submission_id);
 
       if (error) throw error;
 
@@ -205,8 +205,8 @@ const CenterCalendarView = () => {
         description: "Placement status has been updated successfully.",
       });
 
-      // Refresh leads to show updated status
-      fetchLeads();
+      // Refresh lawyers to show updated status
+      fetchLawyers();
     } catch (error) {
       console.error('Error updating placement status:', error);
       toast({
@@ -217,23 +217,23 @@ const CenterCalendarView = () => {
     }
   };
 
-  const getLeadCountForDate = (date: Date): number => {
+  const getLawyerCountForDate = (date: Date): number => {
     const dateString = format(date, 'yyyy-MM-dd');
-    return leads.filter(lead => {
-      if (!lead.draft_date) return false;
+    return lawyers.filter(lawyer => {
+      if (!lawyer.draft_date) return false;
       try {
         // Parse date string directly without timezone conversion
-        let leadDraftDate: string;
-        if (typeof lead.draft_date === 'string' && lead.draft_date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        let lawyerDraftDate: string;
+        if (typeof lawyer.draft_date === 'string' && lawyer.draft_date.match(/^\d{4}-\d{2}-\d{2}$/)) {
           // Already in YYYY-MM-DD format, use directly
-          leadDraftDate = lead.draft_date;
+          lawyerDraftDate = lawyer.draft_date;
         } else {
           // Parse and format
-          leadDraftDate = format(new Date(lead.draft_date), 'yyyy-MM-dd');
+          lawyerDraftDate = format(new Date(lawyer.draft_date), 'yyyy-MM-dd');
         }
-        return leadDraftDate === dateString;
+        return lawyerDraftDate === dateString;
       } catch (error) {
-        // Skip leads with invalid draft_date
+        // Skip lawyers with invalid draft_date
         return false;
       }
     }).length;
@@ -262,11 +262,11 @@ const CenterCalendarView = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
         {/* Center Info Badge */}
-        <div className="mb-6">
-          <Badge variant="outline" className="flex items-center space-x-2 w-fit px-4 py-2">
-            <User className="h-4 w-4" />
+        <div className="mb-4 sm:mb-6">
+          <Badge variant="outline" className="flex items-center space-x-2 w-fit px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm">
+            <User className="h-3 w-3 sm:h-4 sm:w-4" />
             <span className="font-medium">{centerInfo.center_name}</span>
             <span className="text-muted-foreground">•</span>
             <span className="text-muted-foreground">{leadVendor}</span>
@@ -274,12 +274,12 @@ const CenterCalendarView = () => {
         </div>
 
         {/* Main Layout: Calendar + Sidebar */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Calendar Section - Left/Main */}
           <div className="lg:col-span-2">
             {/* Carrier Filter */}
             <Card className="mb-4">
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="space-y-2">
                   <Label htmlFor="carrier-filter">Filter by Carrier</Label>
                   <Select value={selectedCarrier} onValueChange={setSelectedCarrier}>
@@ -299,51 +299,51 @@ const CenterCalendarView = () => {
             </Card>
 
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Calendar className="h-5 w-5" />
+              <CardHeader className="p-4 sm:p-6">
+                <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
+                  <Calendar className="h-4 w-4 sm:h-5 sm:w-5" />
                   <span>Select Draft Date</span>
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-3 sm:p-6">
                 <CenterCalendarComponent
                   selectedDate={selectedDate}
                   onDateSelect={handleDateSelect}
-                  getLeadCountForDate={getLeadCountForDate}
-                  leads={leads}
+                  getLeadCountForDate={getLawyerCountForDate}
+                  leads={lawyers}
                 />
               </CardContent>
             </Card>
 
             {/* Stats Below Calendar */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mt-4 sm:mt-6">
               <Card>
-                <CardContent className="p-4">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center space-x-2">
                     <User className="h-4 w-4 text-blue-500" />
-                    <span className="text-sm text-muted-foreground">Total Leads</span>
+                    <span className="text-xs sm:text-sm text-muted-foreground">Total Lawyers</span>
                   </div>
-                  <p className="text-2xl font-bold">{leads.length}</p>
+                  <p className="text-xl sm:text-2xl font-bold">{lawyers.length}</p>
                 </CardContent>
               </Card>
               <Card>
-                <CardContent className="p-4">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center space-x-2">
                     <Calendar className="h-4 w-4 text-green-500" />
-                    <span className="text-sm text-muted-foreground">With Draft Date</span>
+                    <span className="text-xs sm:text-sm text-muted-foreground">With Draft Date</span>
                   </div>
-                  <p className="text-2xl font-bold">
-                    {leads.filter(l => l.draft_date).length}
+                  <p className="text-xl sm:text-2xl font-bold">
+                    {lawyers.filter(l => l.draft_date).length}
                   </p>
                 </CardContent>
               </Card>
               <Card>
-                <CardContent className="p-4">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center space-x-2">
                     <Calendar className="h-4 w-4 text-purple-500" />
-                    <span className="text-sm text-muted-foreground">Selected Date</span>
+                    <span className="text-xs sm:text-sm text-muted-foreground">Selected Date</span>
                   </div>
-                  <p className="text-2xl font-bold">{filteredLeads.length}</p>
+                  <p className="text-xl sm:text-2xl font-bold">{filteredLawyers.length}</p>
                 </CardContent>
               </Card>
             </div>
@@ -351,14 +351,14 @@ const CenterCalendarView = () => {
 
           {/* Sidebar - Right */}
           <div className="lg:col-span-1">
-            <Card className="sticky top-4">
-              <CardHeader>
-                <CardTitle className="text-lg">
+            <Card className="lg:sticky lg:top-4">
+              <CardHeader className="p-4 sm:p-6">
+                <CardTitle className="text-base sm:text-lg">
                   {selectedDate ? (
                     <>
-                      Leads for {format(selectedDate, 'MMM dd, yyyy')}
-                      <span className="ml-2 text-sm font-normal text-muted-foreground">
-                        ({filteredLeads.length})
+                      Lawyers for {format(selectedDate, 'MMM dd, yyyy')}
+                      <span className="ml-2 text-xs sm:text-sm font-normal text-muted-foreground">
+                        ({filteredLawyers.length})
                       </span>
                     </>
                   ) : (
@@ -366,71 +366,71 @@ const CenterCalendarView = () => {
                   )}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="max-h-[calc(100vh-12rem)] overflow-y-auto">
+              <CardContent className="p-4 sm:p-6 max-h-[calc(100vh-12rem)] overflow-y-auto">
                 {!selectedDate ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <Calendar className="h-12 w-12 mx-auto mb-3 opacity-50" />
                     <p>Please select a date from the calendar</p>
                   </div>
-                ) : filteredLeads.length === 0 ? (
+) : filteredLawyers.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <Calendar className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                    <p>No leads scheduled for this date</p>
+                    <p>No lawyers scheduled for this date</p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {filteredLeads.map((lead) => (
-                      <Card key={lead.id} className="border hover:shadow-md transition-shadow">
-                        <CardContent className="p-3">
+                  <div className="space-y-2 sm:space-y-3">
+                    {filteredLawyers.map((lawyer) => (
+                      <Card key={lawyer.id} className="border hover:shadow-md transition-shadow">
+                        <CardContent className="p-2.5 sm:p-3">
                           <div className="space-y-1.5">
-                            <div className="flex items-center justify-between">
-                              <h4 className="font-semibold text-sm line-clamp-1">
-                                {lead.customer_full_name || 'Unknown'}
+                            <div className="flex items-center justify-between gap-2">
+                              <h4 className="font-semibold text-xs sm:text-sm line-clamp-1 flex-1">
+                                {lawyer.customer_full_name || 'Unknown'}
                               </h4>
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => handleEditPlacementStatus(lead)}
-                                className="h-7 w-7 p-0"
+                                onClick={() => handleEditPlacementStatus(lawyer)}
+                                className="h-6 w-6 sm:h-7 sm:w-7 p-0 shrink-0"
                               >
-                                <Edit className="h-3.5 w-3.5" />
+                                <Edit className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                               </Button>
                             </div>
 
-                            <div className="space-y-0.5 text-xs text-muted-foreground">
+                            <div className="space-y-0.5 text-[10px] sm:text-xs text-muted-foreground">
                               <div className="flex items-center space-x-1">
-                                <Phone className="h-3 w-3" />
-                                <span>{lead.phone_number || 'N/A'}</span>
+                                <Phone className="h-2.5 w-2.5 sm:h-3 sm:w-3 shrink-0" />
+                                <span className="break-all">{lawyer.phone_number || 'N/A'}</span>
                               </div>
                               <div className="flex items-center space-x-1">
-                                <DollarSign className="h-3 w-3" />
+                                <DollarSign className="h-2.5 w-2.5 sm:h-3 sm:w-3 shrink-0" />
                                 <span>
-                                  ${lead.face_amount?.toLocaleString() || lead.coverage_amount?.toLocaleString() || 'N/A'}
+                                  ${lawyer.face_amount?.toLocaleString() || lawyer.coverage_amount?.toLocaleString() || 'N/A'}
                                 </span>
                               </div>
-                              {lead.carrier && (
+                              {lawyer.carrier && (
                                 <div className="flex items-center space-x-1">
                                   <span className="font-medium">Carrier:</span>
-                                  <span>{lead.carrier}</span>
+                                  <span>{lawyer.carrier}</span>
                                 </div>
                               )}
-                              {lead.state && (
+                              {lawyer.state && (
                                 <div className="flex items-center space-x-1">
                                   <span className="font-medium">State:</span>
-                                  <span>{lead.state}</span>
+                                  <span>{lawyer.state}</span>
                                 </div>
                               )}
-                              {lead.placement_status && (
+                              {lawyer.placement_status && (
                                 <div className="flex items-center space-x-1">
                                   <Badge 
                                     variant={
-                                      lead.placement_status === 'Good Standing' ? 'default' :
-                                      lead.placement_status === 'Not Placed' ? 'destructive' :
+                                      lawyer.placement_status === 'Good Standing' ? 'default' :
+                                      lawyer.placement_status === 'Not Placed' ? 'destructive' :
                                       'secondary'
                                     }
-                                    className="text-xs"
+                                    className="text-[10px] sm:text-xs px-1.5 py-0.5"
                                   >
-                                    {lead.placement_status}
+                                    {lawyer.placement_status}
                                   </Badge>
                                 </div>
                               )}
@@ -448,12 +448,12 @@ const CenterCalendarView = () => {
       </div>
 
       {/* Placement Status Modal */}
-      {selectedLead && (
+      {selectedLawyer && (
         <PlacementStatusModal
           open={modalOpen}
           onOpenChange={setModalOpen}
-          currentStatus={selectedLead.placement_status || null}
-          leadName={selectedLead.customer_full_name || 'Unknown'}
+          currentStatus={selectedLawyer.placement_status || null}
+          leadName={selectedLawyer.customer_full_name || 'Unknown'}
           onSave={handleSavePlacementStatus}
         />
       )}

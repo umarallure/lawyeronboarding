@@ -13,6 +13,8 @@ import {
   CheckCircle,
   PanelLeftClose,
   PanelLeftOpen,
+  Menu,
+  X,
 } from 'lucide-react';
 
 import { TbUserShield } from "react-icons/tb";
@@ -81,6 +83,8 @@ const AppShell = ({
 
     return collapseSidebar;
   });
+
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     // Keep the persisted state aligned for Daily Outreach Report routes that don't force a default.
@@ -152,7 +156,7 @@ const AppShell = ({
         icon: <LayoutDashboard className="h-4 w-4 text-current" />,
       },
       {
-        label: 'Leads',
+        label: 'Lawyers',
         to: '/leads',
         icon: <Users className="h-4 w-4 text-current" />,
         end: true,
@@ -191,6 +195,15 @@ const AppShell = ({
   return (
     <div className="h-screen w-full bg-background overflow-hidden">
       <div className="flex h-full w-full">
+        {/* Mobile Overlay */}
+        {mobileMenuOpen && (
+          <div 
+            className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+        )}
+
+        {/* Sidebar */}
         <aside
           onMouseMove={handleSidebarActivity}
           onMouseDown={handleSidebarActivity}
@@ -198,9 +211,9 @@ const AppShell = ({
           onFocus={handleSidebarActivity}
           onTouchStart={handleSidebarActivity}
           className={
-            isSidebarCollapsed
-              ? "w-16 shrink-0 border-r border-sidebar-border bg-sidebar flex flex-col"
-              : "w-64 shrink-0 border-r border-sidebar-border bg-sidebar flex flex-col"
+            `${isSidebarCollapsed ? "w-16" : "w-64"} shrink-0 border-r border-sidebar-border bg-sidebar flex flex-col transition-transform duration-300 ease-in-out
+            ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0
+            fixed lg:static inset-y-0 left-0 z-50`
           }
         >
           <div
@@ -245,13 +258,30 @@ const AppShell = ({
 
         <div className="flex min-w-0 flex-1 min-h-0 flex-col">
           <header className="h-14 border-b bg-card">
-            <div className="h-full px-6 flex items-center justify-between">
-              <div className="flex items-center gap-3 min-w-0">
+            <div className="h-full px-4 sm:px-6 flex items-center justify-between">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                {/* Mobile Hamburger Menu */}
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8"
+                  className="h-8 w-8 lg:hidden"
+                  aria-label="Toggle menu"
+                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                >
+                  {mobileMenuOpen ? (
+                    <X className="h-5 w-5" />
+                  ) : (
+                    <Menu className="h-5 w-5" />
+                  )}
+                </Button>
+
+                {/* Desktop Sidebar Toggle */}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 hidden lg:flex"
                   aria-label={isSidebarCollapsed ? 'Open sidebar' : 'Collapse sidebar'}
                   onClick={() => {
                     setSidebarCollapsed((prev) => !prev);
@@ -263,7 +293,7 @@ const AppShell = ({
                     <PanelLeftClose className="h-4 w-4" />
                   )}
                 </Button>
-                <h1 className="text-sm font-semibold text-foreground truncate">{title}</h1>
+                <h1 className="text-xs sm:text-sm font-semibold text-foreground truncate">{title}</h1>
               </div>
 
               <DropdownMenu>
@@ -301,7 +331,9 @@ const AppShell = ({
           </header>
 
           <main className="app-main min-w-0 flex-1 overflow-y-auto">
-            {children}
+            <div className="w-full">
+              {children}
+            </div>
           </main>
         </div>
       </div>

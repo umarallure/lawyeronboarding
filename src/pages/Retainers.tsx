@@ -316,7 +316,7 @@ const Retainers = () => {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="name-filter">Search Leads</Label>
+                <Label htmlFor="name-filter">Search Lawyers</Label>
                 <div className="relative">
                   <Input
                     id="name-filter"
@@ -359,7 +359,7 @@ const Retainers = () => {
                 className="flex items-center space-x-2"
               >
                 <Phone className="h-4 w-4" />
-                <span>New Lead</span>
+                <span>New Lawyer</span>
               </Button>
             </div>
           </CardContent>
@@ -367,10 +367,10 @@ const Retainers = () => {
 
         {/* Main Content */}
         <div className="space-y-6">
-            {/* Leads List */}
+            {/* Lawyers List */}
             <div className="space-y-4">
               <div className="flex justify-between items-center">
-                <h2 className="text-xl font-semibold">Total Leads</h2>
+                <h2 className="text-xl font-semibold">Total Lawyers</h2>
                 {totalPages > 1 && (
                   <div className="text-sm text-muted-foreground">
                     Page {currentPage} of {totalPages}
