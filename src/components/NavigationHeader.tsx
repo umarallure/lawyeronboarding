@@ -139,11 +139,11 @@ export const NavigationHeader = ({ title, showBackButton = false, backTo }: Navi
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => navigate('/transfer-portal')}>
                       <Eye className="mr-2 h-4 w-4" />
-                      Transfer Portal
+                      Marketing Pipeline
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => navigate('/submission-portal')}>
                       <CheckCircle className="mr-2 h-4 w-4" />
-                      Submission Portal
+                      Lawyer Portal
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                   </>

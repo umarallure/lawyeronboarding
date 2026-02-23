@@ -34,6 +34,8 @@ type LawyerLead = {
   state: string | null;
   zip_code: string | null;
   additional_notes: string | null;
+  source: string | null;
+  campaign_software: string | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -428,7 +430,8 @@ const LawyerLeadDetailsPage = () => {
                   <Field label="Pipeline">
                     <div className="flex items-center h-9">
                       <Badge variant="secondary" className="text-sm">
-                        {form.pipeline_name === "cold_call_pipeline" ? "Cold Call Pipeline" : 
+                        {form.pipeline_name === "cold_call_pipeline" ? "Marketing Pipeline" : 
+                         form.pipeline_name === "lawyer_portal" ? "Lawyer Portal" : 
                          form.pipeline_name === "submission_portal" ? "Submission Portal" : 
                          form.pipeline_name || "Unknown"}
                       </Badge>

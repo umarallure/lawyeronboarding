@@ -82,7 +82,7 @@ const SubmissionPortalPage = () => {
   const navigate = useNavigate();
 
   // --- Dynamic pipeline stages from DB ---
-  const { stages: dbSubmissionStages, loading: stagesLoading } = usePipelineStages("submission_portal");
+  const { stages: dbSubmissionStages, loading: stagesLoading } = usePipelineStages("lawyer_portal");
 
   // --- Derive parent stages (kanban columns) from flat DB stages ---
   const parentStages = useMemo(() => deriveParentStages(dbSubmissionStages), [dbSubmissionStages]);
@@ -413,7 +413,7 @@ const SubmissionPortalPage = () => {
       const { data: transferData, error: transferError } = await transfersQuery;
 
       if (transferError) {
-        console.error("Error fetching submission portal base transfers:", transferError);
+        console.error("Error fetching lawyer portal base transfers:", transferError);
         toast({
           title: "Error",
           description: "Failed to fetch transfer portal data",
@@ -422,7 +422,7 @@ const SubmissionPortalPage = () => {
         return;
       }
 
-      // Get submission portal data for entries that exist
+      // Get lawyer portal data for entries that exist
       let submissionQuery = (supabase as any)
         .from('submission_portal')
         .select('*');
@@ -440,7 +440,7 @@ const SubmissionPortalPage = () => {
       const { data: submissionDataRaw, error: submissionError } = await submissionQuery;
 
       if (submissionError) {
-        console.warn("Error fetching submission portal data:", submissionError);
+        console.warn("Error fetching lawyer portal data:", submissionError);
         // Continue with just transfer data
       }
 
@@ -776,7 +776,7 @@ const SubmissionPortalPage = () => {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex items-center gap-2">
           <Loader2 className="h-4 w-4 animate-spin" />
-          <span>Loading submission portal data...</span>
+          <span>Loading lawyer portal data...</span>
         </div>
       </div>
     );
@@ -784,7 +784,7 @@ const SubmissionPortalPage = () => {
 
   const handleView = (row: SubmissionPortalRow) => {
     if (!row?.id) return;
-    navigate(`/daily-deal-flow/lead/${encodeURIComponent(row.id)}`, {
+    navigate(`/lead-detail/${encodeURIComponent(row.id)}`, {
       state: { activeNav: '/submission-portal' },
     });
   };
@@ -871,7 +871,7 @@ const SubmissionPortalPage = () => {
               lead_id: editRow.id,
               submission_id: editRow.submission_id ?? null,
               note: trimmedNote,
-              source: 'Submission Portal',
+              source: 'Lawyer Portal',
               created_by: createdBy,
               author_name: authorName,
             });

@@ -42,7 +42,7 @@ const Retainers = () => {
   const [filteredLeads, setFilteredLeads] = useState<LawyerLead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
-  // Track which lead cards are expanded (show accident details)
+  // Track which lead cards are expanded (show lawyer details)
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
   const [dateFilter, setDateFilter] = useState('');
   const [vendorFilter, setVendorFilter] = useState('all');
@@ -301,15 +301,15 @@ const Retainers = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="vendor-filter">Vendor</Label>
+                <Label htmlFor="vendor-filter">Firm</Label>
                 <Select value={vendorFilter} onValueChange={setVendorFilter}>
                   <SelectTrigger>
-                    <SelectValue placeholder="All vendors" />
+                    <SelectValue placeholder="All firms" />
                   </SelectTrigger>
                   <SelectContent>
                     {vendorOptions.map((vendor) => (
                       <SelectItem key={vendor} value={vendor}>
-                        {vendor === 'all' ? 'All Vendors' : vendor}
+                        {vendor === 'all' ? 'All Firms' : vendor}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -355,7 +355,7 @@ const Retainers = () => {
                 <p className="text-sm text-muted-foreground">Create new leads or manage existing entries</p>
               </div>
               <Button 
-                onClick={() => navigate('/new-callback')}
+                onClick={() => navigate('/add-lead')}
                 className="flex items-center space-x-2"
               >
                 <Phone className="h-4 w-4" />
@@ -367,16 +367,16 @@ const Retainers = () => {
 
         {/* Main Content */}
         <div className="space-y-6">
-            {/* Lawyers List */}
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h2 className="text-xl font-semibold">Total Lawyers</h2>
-                {totalPages > 1 && (
-                  <div className="text-sm text-muted-foreground">
-                    Page {currentPage} of {totalPages}
-                  </div>
-                )}
-              </div>
+          {/* Lawyers List */}
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold">Total Lawyers ({filteredLeads.length})</h2>
+              {totalPages > 1 && (
+                <div className="text-sm text-muted-foreground">
+                  Page {currentPage} of {totalPages}
+                </div>
+              )}
+            </div>
 
               {filteredLeads.length === 0 ? (
                 <Card>
@@ -387,24 +387,22 @@ const Retainers = () => {
               ) : (
                 <>
                   {paginatedLeads.map((lead) => (
-                    <Card key={lead.id} className="hover:shadow-md transition-shadow">
+                    <Card 
+                      key={lead.id} 
+                      className="hover:shadow-md transition-shadow cursor-pointer"
+                      onClick={() => navigate(`/lead-detail/${lead.id}`)}
+                    >
                       <CardContent className="p-6">
                         <div className="flex justify-between items-start">
                           <div className="space-y-3 flex-1">
                             <div
-                              className="flex items-center space-x-3 cursor-pointer select-none group"
-                              onClick={() => toggleExpand(lead.id)}
-                              role="button"
-                              tabIndex={0}
-                              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleExpand(lead.id); } }}
+                              className="flex items-center space-x-3 select-none group"
                             >
-                              <button
-                                type="button"
+                              <div
                                 className="text-lg font-semibold group-hover:underline text-left"
-                                onClick={(e) => e.stopPropagation()}
                               >
                                 {(lead.lawyer_full_name || 'N/A') + ' - ' + (lead.firm_name || 'N/A')}
-                              </button>
+                              </div>
                               <Badge className={getStatusColor(getLeadStatus(lead))}>
                                 {getLeadStatus(lead)}
                               </Badge>
@@ -424,7 +422,7 @@ const Retainers = () => {
                                 ) : (
                                   <>
                                     <ChevronDown className="h-4 w-4" />
-                                    <span className="hidden sm:inline text-sm text-muted-foreground">Accident Details</span>
+                                    <span className="hidden sm:inline text-sm text-muted-foreground">Lawyer Details</span>
                                   </>
                                 )}
                               </Button>
@@ -544,7 +542,6 @@ const Retainers = () => {
               )}
             </div>
           </div>
-      
     </div>
   );
 };

@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeftRight, Loader2, Pencil, RefreshCw, Users, StickyNote } from "lucide-react";
+import { ArrowLeftRight, Loader2, Pencil, RefreshCw, Users, StickyNote, Plus } from "lucide-react";
 import { usePipelineStages, type PipelineStage } from "@/hooks/usePipelineStages";
 
 export interface TransferPortalRow {
@@ -365,7 +365,7 @@ const TransferPortalPage = () => {
               lead_id: editRow.id,
               submission_id: (editRow as any).submission_id ?? null,
               note: trimmedNote,
-              source: 'Transfer Portal',
+              source: 'Marketing Pipeline',
               created_by: createdBy,
               author_name: authorName,
             });
@@ -658,7 +658,7 @@ const TransferPortalPage = () => {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex items-center gap-2">
           <Loader2 className="h-4 w-4 animate-spin" />
-          <span>Loading transfer portal data...</span>
+          <span>Loading marketing pipeline data...</span>
         </div>
       </div>
     );
@@ -734,6 +734,10 @@ const TransferPortalPage = () => {
               <Button size="sm" onClick={handleRefresh} disabled={refreshing}>
                 <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
                 Refresh
+              </Button>
+              <Button size="sm" onClick={() => navigate('/add-lead')} variant="default">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Lawyer
               </Button>
             </div>
           </div>

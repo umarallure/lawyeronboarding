@@ -18,7 +18,6 @@ import CallResultUpdate from "./pages/CallResultUpdate";
 import CallResultJourney from "./pages/CallResultJourney";
 import NewCallback from "./pages/NewCallback";
 import DailyDealFlowPage from "./pages/DailyDealFlow/DailyDealFlowPage";
-import DailyDealFlowLeadDetailsPage from "@/pages/DailyDealFlow/DailyDealFlowLeadDetailsPage";
 import LawyerLeadDetailsPage from "@/pages/LawyerLeadDetailsPage";
 import LeadDetailsPage from "./pages/LeadDetails/LeadDetailsPage";
 import TransferPortalPage from "./pages/TransferPortalPage";
@@ -186,10 +185,10 @@ const App = () => (
               } 
             />
             <Route 
-              path="/new-callback" 
+              path="/add-lead" 
               element={
                 <ProtectedRoute>
-                  <AppShell title="New Lawyer">
+                  <AppShell title="Add Lawyer">
                     <NewCallback />
                   </AppShell>
                 </ProtectedRoute>
@@ -240,20 +239,6 @@ const App = () => (
               } 
             />
             <Route 
-              path="/daily-deal-flow/lead/:id" 
-              element={
-                <ProtectedRoute>
-                  <AppShell
-                    title="Lead Details"
-                    defaultSidebarCollapsed
-                    autoCollapseSidebarAfterMs={2000}
-                  >
-                    <DailyDealFlowLeadDetailsPage />
-                  </AppShell>
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
               path="/lead-detail/:id" 
               element={
                 <ProtectedRoute>
@@ -271,7 +256,7 @@ const App = () => (
               path="/transfer-portal" 
               element={
                 <ProtectedRoute>
-                  <AppShell title="Transfer Portal">
+                  <AppShell title="Marketing Pipeline">
                     <TransferPortalPage />
                   </AppShell>
                 </ProtectedRoute>
@@ -281,7 +266,7 @@ const App = () => (
               path="/submission-portal" 
               element={
                 <ProtectedRoute>
-                  <AppShell title="Submission Portal">
+                  <AppShell title="Lawyer Portal">
                     <SubmissionPortalPage />
                   </AppShell>
                 </ProtectedRoute>

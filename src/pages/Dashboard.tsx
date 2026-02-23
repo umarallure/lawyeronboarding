@@ -32,10 +32,10 @@ import {
 } from 'date-fns';
 
 type DashboardStats = {
-  retainers: number;
-  transfers: number;
   conversions: number;
-  agents: number;
+  scheduledMeetings: number;
+  signedAgreements: number;
+  activeLawyers: number;
 };
 
 type TimeRange = 'this_week' | 'last_week' | 'this_month' | 'last_month';
@@ -82,10 +82,10 @@ const getRangeBounds = (range: TimeRange) => {
 
 const Dashboard = () => {
   const [stats, setStats] = useState<DashboardStats>({
-    retainers: 0,
-    transfers: 0,
     conversions: 0,
-    agents: 0,
+    scheduledMeetings: 0,
+    signedAgreements: 0,
+    activeLawyers: 0,
   });
 
   const [timeRange, setTimeRange] = useState<TimeRange>('this_week');
@@ -98,31 +98,20 @@ const Dashboard = () => {
     let cancelled = false;
 
     const run = async () => {
-      const pendingApprovalStatus = 'Pending Approval';
-
       const { start, end } = getRangeBounds(timeRange);
       const startIso = start.toISOString();
       const endExclusiveIso = addDays(startOfDay(end), 1).toISOString();
 
       const days = eachDayOfInterval({ start, end });
 
-      const [leadsRes, dailyTotalRes, dailyPendingRes, agentsRes, dealFlowRowsRes] = await Promise.all([
-        supabase
-          .from('leads')
-          .select('*', { count: 'exact', head: true })
-          .gte('created_at', startIso)
-          .lt('created_at', endExclusiveIso),
-        supabase
-          .from('daily_deal_flow')
-          .select('*', { count: 'exact', head: true })
-          .gte('created_at', startIso)
-          .lt('created_at', endExclusiveIso),
-        supabase
-          .from('daily_deal_flow')
-          .select('*', { count: 'exact', head: true })
-          .eq('status', pendingApprovalStatus),
-        supabase.from('agents').select('*', { count: 'exact', head: true }),
-        supabase
+      const sb: any = supabase;
+
+      const [stagesRes, dealFlowRowsRes] = await Promise.all([
+        sb
+          .from('portal_stages')
+          .select('id,label,pipeline')
+          .in('pipeline', ['cold_call_pipeline', 'lawyer_portal']),
+        sb
           .from('daily_deal_flow')
           .select('created_at,status')
           .gte('created_at', startIso)
@@ -132,13 +121,70 @@ const Dashboard = () => {
 
       if (cancelled) return;
 
-      const retainers = dailyPendingRes.count ?? 0;
-      const dailyTotal = dailyTotalRes.count ?? 0;
-      const conversions = dailyPendingRes.count ?? 0;
-      const transfers = dailyTotal;
-      const agents = agentsRes.count ?? 0;
+      const stages = (stagesRes.data ?? []) as Array<{
+        id: string;
+        label: string;
+        pipeline: string;
+      }>;
 
-      setStats({ retainers, transfers, conversions, agents });
+      const normalize = (value: string) => value.trim().toLowerCase();
+
+      const coldCallScheduledLabels = new Set([
+        normalize('Scheduled for Zoom'),
+        normalize('Scheduled for Zoom.'),
+        normalize('Scheduled for Zoom '),
+        normalize('Scheduled for Zoom  '),
+      ]);
+
+      const signedAgreementLabels = new Set([
+        normalize('Retainer Signed'),
+        normalize('Retainer Signed.'),
+      ]);
+
+      const countLawyerLeadsByStageIds = async (stageIds: string[]): Promise<number> => {
+        if (!stageIds.length) return 0;
+
+        const res = await sb
+          .from('lawyer_leads')
+          .select('id', { count: 'exact', head: true })
+          .gte('created_at', startIso)
+          .lt('created_at', endExclusiveIso)
+          .in('stage_id', stageIds);
+
+        return (res?.count ?? 0) as number;
+      };
+
+      const scheduledStageIds = stages
+        .filter((s) => s.pipeline === 'cold_call_pipeline')
+        .filter((s) => coldCallScheduledLabels.has(normalize(s.label)))
+        .map((s) => s.id);
+
+      const signedStageIds = stages
+        .filter((s) => s.pipeline === 'lawyer_portal')
+        .filter((s) => signedAgreementLabels.has(normalize(s.label)))
+        .map((s) => s.id);
+
+      const activeStageIds = stages
+        .filter((s) => s.pipeline === 'lawyer_portal')
+        .filter((s) => normalize(s.label).startsWith('active'))
+        .map((s) => s.id);
+
+      const [scheduledMeetings, signedAgreements, activeLawyers] = await Promise.all([
+        countLawyerLeadsByStageIds(scheduledStageIds),
+        countLawyerLeadsByStageIds(signedStageIds),
+        countLawyerLeadsByStageIds(activeStageIds),
+      ]);
+
+      if (cancelled) return;
+
+      const conversions = signedAgreements;
+
+      setStats({
+        scheduledMeetings,
+        signedAgreements,
+        activeLawyers,
+        conversions,
+      });
 
       const rows = (dealFlowRowsRes.data ?? []) as Array<{
         created_at: string | null;
@@ -157,7 +203,7 @@ const Dashboard = () => {
         const bucket = byDay.get(key);
         if (!bucket) return;
         bucket.total += 1;
-        if ((r.status || '').trim() === pendingApprovalStatus) bucket.pending += 1;
+        if ((r.status || '').trim() === 'Pending Approval') bucket.pending += 1;
       });
 
       const trend = Array.from(byDay.entries()).map(([key, v]) => ({
@@ -196,19 +242,19 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Retainers</CardTitle>
+            <CardTitle className="text-sm">Scheduled Meetings</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-semibold">{stats.retainers}</div>
+            <div className="text-3xl font-semibold">{stats.scheduledMeetings}</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Transfers</CardTitle>
+            <CardTitle className="text-sm">Signed Agreements</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-semibold">{stats.transfers}</div>
+            <div className="text-3xl font-semibold">{stats.signedAgreements}</div>
           </CardContent>
         </Card>
 
@@ -223,10 +269,10 @@ const Dashboard = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Onboarding Agents</CardTitle>
+            <CardTitle className="text-sm">Active Lawyers</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-semibold">{stats.agents}</div>
+            <div className="text-3xl font-semibold">{stats.activeLawyers}</div>
           </CardContent>
         </Card>
       </div>

@@ -162,12 +162,12 @@ const AppShell = ({
         end: true,
       },
       {
-        label: 'Cold Call Pipeline',
+        label: 'Marketing Pipeline',
         to: '/transfer-portal',
         icon: <Eye className="h-4 w-4 text-current" />,
       },
       {
-        label: 'Submission Portal',
+        label: 'Lawyer Portal',
         to: '/submission-portal',
         icon: <CheckCircle className="h-4 w-4 text-current" />,
       },

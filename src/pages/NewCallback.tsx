@@ -36,6 +36,8 @@ const NewCallback = () => {
   const [profileDescription, setProfileDescription] = useState("");
   const [additionalNotes, setAdditionalNotes] = useState("");
   const [stageId, setStageId] = useState<string>("");
+  const [source, setSource] = useState("");
+  const [campaignSoftware, setCampaignSoftware] = useState("");
   
   // Generate unique submission ID
   const generateSubmissionId = () => {
@@ -90,6 +92,8 @@ const NewCallback = () => {
         state: string | null;
         zip_code: string | null;
         additional_notes: string | null;
+        source: string | null;
+        campaign_software: string | null;
       } = {
         user_id: user?.id ?? null,
         pipeline_name: selectedPipeline,
@@ -108,6 +112,8 @@ const NewCallback = () => {
         state: state || null,
         zip_code: zipCode || null,
         additional_notes: additionalNotes || null,
+        source: source || null,
+        campaign_software: campaignSoftware || null,
       };
 
       // Insert into lawyer_leads table
@@ -172,162 +178,206 @@ const NewCallback = () => {
           </div>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Lawyer Information</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Required Fields */}
-              <div className="space-y-4 p-4 border rounded-lg bg-blue-50">
-                <h3 className="font-semibold text-blue-800">Required Information</h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="lawyerFullName">Lawyer Full Name *</Label>
-                    <Input
-                      id="lawyerFullName"
-                      value={lawyerFullName}
-                      onChange={(e) => setLawyerFullName(e.target.value)}
-                      placeholder="Enter full name"
-                      required
-                    />
-                  </div>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Firm Details Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Firm Details</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="firmName">Firm Name</Label>
+                  <Input
+                    id="firmName"
+                    value={firmName}
+                    onChange={(e) => setFirmName(e.target.value)}
+                    placeholder="Enter firm name"
+                  />
+                </div>
 
-                  <div>
-                    <Label htmlFor="phoneNumber">Phone Number *</Label>
-                    <Input
-                      id="phoneNumber"
-                      value={phoneNumber}
-                      onChange={(e) => setPhoneNumber(e.target.value)}
-                      placeholder="(555) 123-4567"
-                      required
-                    />
-                  </div>
+                <div>
+                  <Label htmlFor="firmPhone">Firm Phone</Label>
+                  <Input
+                    id="firmPhone"
+                    value={firmPhoneNo}
+                    onChange={(e) => setFirmPhoneNo(e.target.value)}
+                    placeholder="(555) 555-5555"
+                  />
+                </div>
 
-                  <div>
-                    <Label htmlFor="firmName">Firm Name</Label>
-                    <Input
-                      id="firmName"
-                      value={firmName}
-                      onChange={(e) => setFirmName(e.target.value)}
-                      placeholder="Firm name"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="pipeline">Pipeline *</Label>
-                    <Select value={selectedPipeline} onValueChange={setSelectedPipeline}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select pipeline" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="cold_call_pipeline">Cold Call Pipeline</SelectItem>
-                        <SelectItem value="submission_portal">Submission Portal</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="stage">Stage</Label>
-                    <Select value={stageId} onValueChange={setStageId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder={stagesLoading ? "Loading stages..." : "Select stage"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {activeStages.map((stage) => (
-                          <SelectItem key={stage.id} value={stage.id}>
-                            {stage.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div className="md:col-span-2">
+                  <Label htmlFor="firmAddress">Firm Address</Label>
+                  <Input
+                    id="firmAddress"
+                    value={firmAddress}
+                    onChange={(e) => setFirmAddress(e.target.value)}
+                    placeholder="Enter firm address"
+                  />
                 </div>
               </div>
+            </CardContent>
+          </Card>
 
-              {/* Optional Contact Information */}
-              <div className="space-y-4 p-4 border rounded-lg bg-gray-50">
-                <h3 className="font-semibold text-gray-800">Contact Information</h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="customer@email.com"
-                    />
-                  </div>
+          {/* Personal Information Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Personal Information</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="lawyerFullName">Lawyer Full Name *</Label>
+                  <Input
+                    id="lawyerFullName"
+                    value={lawyerFullName}
+                    onChange={(e) => setLawyerFullName(e.target.value)}
+                    placeholder="Enter full name"
+                    required
+                  />
+                </div>
 
-                  <div>
-                    <Label htmlFor="streetAddress">Street Address</Label>
-                    <Input
-                      id="streetAddress"
-                      value={streetAddress}
-                      onChange={(e) => setStreetAddress(e.target.value)}
-                      placeholder="123 Main St"
-                    />
-                  </div>
+                <div>
+                  <Label htmlFor="phoneNumber">Phone Number *</Label>
+                  <Input
+                    id="phoneNumber"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    placeholder="(555) 123-4567"
+                    required
+                  />
+                </div>
 
-                  <div>
-                    <Label htmlFor="city">City</Label>
-                    <Input
-                      id="city"
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                      placeholder="City"
-                    />
-                  </div>
+                <div>
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="lawyer@email.com"
+                  />
+                </div>
 
-                  <div>
-                    <Label htmlFor="state">State</Label>
-                    <Input
-                      id="state"
-                      value={state}
-                      onChange={(e) => setState(e.target.value)}
-                      placeholder="State"
-                    />
-                  </div>
+                <div>
+                  <Label htmlFor="streetAddress">Street Address</Label>
+                  <Input
+                    id="streetAddress"
+                    value={streetAddress}
+                    onChange={(e) => setStreetAddress(e.target.value)}
+                    placeholder="123 Main St"
+                  />
+                </div>
 
-                  <div>
-                    <Label htmlFor="zipCode">ZIP Code</Label>
-                    <Input
-                      id="zipCode"
-                      value={zipCode}
-                      onChange={(e) => setZipCode(e.target.value)}
-                      placeholder="12345"
-                    />
-                  </div>
+                <div>
+                  <Label htmlFor="city">City</Label>
+                  <Input
+                    id="city"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    placeholder="City"
+                  />
+                </div>
 
-                  <div>
-                    <Label htmlFor="firmPhone">Firm Phone</Label>
-                    <Input
-                      id="firmPhone"
-                      value={firmPhoneNo}
-                      onChange={(e) => setFirmPhoneNo(e.target.value)}
-                      placeholder="(555) 555-5555"
-                    />
-                  </div>
+                <div>
+                  <Label htmlFor="state">State</Label>
+                  <Input
+                    id="state"
+                    value={state}
+                    onChange={(e) => setState(e.target.value)}
+                    placeholder="State"
+                  />
+                </div>
 
-                  <div className="md:col-span-2">
-                    <Label htmlFor="firmAddress">Firm Address</Label>
-                    <Input
-                      id="firmAddress"
-                      value={firmAddress}
-                      onChange={(e) => setFirmAddress(e.target.value)}
-                      placeholder="Firm address"
-                    />
-                  </div>
+                <div>
+                  <Label htmlFor="zipCode">ZIP Code</Label>
+                  <Input
+                    id="zipCode"
+                    value={zipCode}
+                    onChange={(e) => setZipCode(e.target.value)}
+                    placeholder="12345"
+                  />
                 </div>
               </div>
+            </CardContent>
+          </Card>
 
-              {/* Profile Information */}
-              <div className="space-y-4 p-4 border rounded-lg bg-gray-50">
-                <h3 className="font-semibold text-gray-800">Profile Information</h3>
-                
+          {/* Pipeline & Source Tracking Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Pipeline & Source Tracking</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="pipeline">Pipeline *</Label>
+                  <Select value={selectedPipeline} onValueChange={setSelectedPipeline}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select pipeline" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cold_call_pipeline">Marketing Pipeline</SelectItem>
+                      <SelectItem value="lawyer_portal">Lawyer Portal</SelectItem>
+                      <SelectItem value="submission_portal">Submission Portal</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="stage">Stage</Label>
+                  <Select value={stageId} onValueChange={setStageId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={stagesLoading ? "Loading stages..." : "Select stage"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activeStages.map((stage) => (
+                        <SelectItem key={stage.id} value={stage.id}>
+                          {stage.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="source">Source</Label>
+                  <Select value={source} onValueChange={setSource}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select source" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Facebook">Facebook</SelectItem>
+                      <SelectItem value="Instagram">Instagram</SelectItem>
+                      <SelectItem value="LinkedIn">LinkedIn</SelectItem>
+                      <SelectItem value="Cold Call">Cold Call</SelectItem>
+                      <SelectItem value="Networking">Networking</SelectItem>
+                      <SelectItem value="Referral">Referral</SelectItem>
+                      <SelectItem value="Website">Website</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="campaignSoftware">Campaign/Software</Label>
+                  <Input
+                    id="campaignSoftware"
+                    value={campaignSoftware}
+                    onChange={(e) => setCampaignSoftware(e.target.value)}
+                    placeholder="e.g., FlowChat - Ben's Account"
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Notes & Description Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Notes & Description</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
                 <div>
                   <Label htmlFor="profileDescription">Profile Description</Label>
                   <Textarea
@@ -350,33 +400,34 @@ const NewCallback = () => {
                   />
                 </div>
               </div>
+            </CardContent>
+          </Card>
 
-              <div className="flex justify-end space-x-4">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={() => navigate("/dashboard")}
-                >
-                  Cancel
-                </Button>
-                <Button 
-                  type="submit" 
-                  disabled={isSubmitting}
-                  className="min-w-32"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    "Create Lead"
-                  )}
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+          {/* Action Buttons */}
+          <div className="flex justify-end space-x-4">
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={() => navigate("/leads")}
+            >
+              Cancel
+            </Button>
+            <Button 
+              type="submit" 
+              disabled={isSubmitting}
+              className="min-w-32"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                "Create Lead"
+              )}
+            </Button>
+          </div>
+        </form>
       </div>
     </div>
   );

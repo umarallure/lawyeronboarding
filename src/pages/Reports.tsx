@@ -206,7 +206,7 @@ export const ReportsPage = () => {
     }
   };
 
-  // Analyze agent performance from submission portal data
+  // Analyze agent performance from lawyer portal data
   const analyzeAgentPerformance = (transfers: any[], submissions: any[], callLogs: any[]) => {
     // Agent lists for validation
     const licensedAccountOptions = [
