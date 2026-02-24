@@ -109,7 +109,7 @@ const Dashboard = () => {
       const [stagesRes, dealFlowRowsRes] = await Promise.all([
         sb
           .from('portal_stages')
-          .select('id,label,pipeline')
+          .select('id,key,label,pipeline')
           .in('pipeline', ['cold_call_pipeline', 'lawyer_portal']),
         sb
           .from('daily_deal_flow')
@@ -123,23 +123,10 @@ const Dashboard = () => {
 
       const stages = (stagesRes.data ?? []) as Array<{
         id: string;
+        key: string;
         label: string;
         pipeline: string;
       }>;
-
-      const normalize = (value: string) => value.trim().toLowerCase();
-
-      const coldCallScheduledLabels = new Set([
-        normalize('Scheduled for Zoom'),
-        normalize('Scheduled for Zoom.'),
-        normalize('Scheduled for Zoom '),
-        normalize('Scheduled for Zoom  '),
-      ]);
-
-      const signedAgreementLabels = new Set([
-        normalize('Retainer Signed'),
-        normalize('Retainer Signed.'),
-      ]);
 
       const countLawyerLeadsByStageIds = async (stageIds: string[]): Promise<number> => {
         if (!stageIds.length) return 0;
@@ -147,8 +134,6 @@ const Dashboard = () => {
         const res = await sb
           .from('lawyer_leads')
           .select('id', { count: 'exact', head: true })
-          .gte('created_at', startIso)
-          .lt('created_at', endExclusiveIso)
           .in('stage_id', stageIds);
 
         return (res?.count ?? 0) as number;
@@ -156,17 +141,17 @@ const Dashboard = () => {
 
       const scheduledStageIds = stages
         .filter((s) => s.pipeline === 'cold_call_pipeline')
-        .filter((s) => coldCallScheduledLabels.has(normalize(s.label)))
+        .filter((s) => s.key === 'scheduled_for_zoom')
         .map((s) => s.id);
 
       const signedStageIds = stages
         .filter((s) => s.pipeline === 'lawyer_portal')
-        .filter((s) => signedAgreementLabels.has(normalize(s.label)))
+        .filter((s) => s.key === 'retainer_signed')
         .map((s) => s.id);
 
       const activeStageIds = stages
         .filter((s) => s.pipeline === 'lawyer_portal')
-        .filter((s) => normalize(s.label).startsWith('active'))
+        .filter((s) => s.key.startsWith('active'))
         .map((s) => s.id);
 
       const [scheduledMeetings, signedAgreements, activeLawyers] = await Promise.all([

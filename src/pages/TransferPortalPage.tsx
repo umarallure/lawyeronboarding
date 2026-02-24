@@ -54,7 +54,6 @@ const TransferPortalPage = () => {
 
   // --- Dynamic pipeline stages from DB ---
   const { stages: dbTransferStages, loading: transferStagesLoading } = usePipelineStages("cold_call_pipeline");
-  const { stages: dbSubmissionStages, loading: submissionStagesLoading } = usePipelineStages("submission_portal");
 
   const kanbanStages = useMemo(() => {
     return dbTransferStages.map((s) => ({ key: s.key, label: s.label }));
@@ -68,19 +67,9 @@ const TransferPortalPage = () => {
     return theme;
   }, [dbTransferStages]);
 
-  const submissionPortalStageLabels = useMemo(() => {
-    return dbSubmissionStages.map((s) => s.label);
-  }, [dbSubmissionStages]);
-
   const allStageOptions = useMemo(() => {
-    return Array.from(
-      new Set(
-        [...kanbanStages.map((s) => s.label), ...submissionPortalStageLabels]
-          .map((label) => label.trim())
-          .filter(Boolean)
-      )
-    );
-  }, [kanbanStages, submissionPortalStageLabels]);
+    return Array.from(new Set(kanbanStages.map((s) => s.label).map((label) => label.trim()).filter(Boolean)));
+  }, [kanbanStages]);
 
   const deriveStageKey = (row: TransferPortalRow): string => {
     const stageId = (row.stage_id || '').trim();
@@ -552,12 +541,7 @@ const TransferPortalPage = () => {
   };
 
   const normalizeSubmissionTransitionStatus = (status: string): string => {
-    const trimmed = (status || '').trim();
-    if (trimmed !== 'Pending Approval') return trimmed;
-    const insuranceDocsStatus = submissionPortalStageLabels.find((label) =>
-      label.includes('Insurance Docs Pending')
-    );
-    return (insuranceDocsStatus || submissionPortalStageLabels[0] || trimmed).trim();
+    return (status || '').trim();
   };
 
   const handleDropToStage = async (rowId: string, stageKey: string) => {
@@ -669,7 +653,7 @@ const TransferPortalPage = () => {
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-7xl mx-auto space-y-6">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-1">
-            <Card>
+            <Card className="w-full max-w-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
                   Total Transfers
