@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -48,6 +48,9 @@ const Retainers = () => {
   const [vendorFilter, setVendorFilter] = useState('all');
   const [vendorOptions, setVendorOptions] = useState<string[]>(['all']);
   const [nameFilter, setNameFilter] = useState('');
+  const [searchDropdownOpen, setSearchDropdownOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchDropdownRef = useRef<HTMLDivElement>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const stageLabelById = useMemo(() => {
@@ -317,13 +320,21 @@ const Retainers = () => {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="name-filter">Search Lawyers</Label>
-                <div className="relative">
+                <div className="relative" ref={searchDropdownRef}>
                   <Input
                     id="name-filter"
+                    ref={searchInputRef}
                     type="text"
                     placeholder="Search by name, phone, submission ID, or email..."
                     value={nameFilter}
-                    onChange={(e) => setNameFilter(e.target.value)}
+                    onChange={(e) => {
+                      setNameFilter(e.target.value);
+                      setSearchDropdownOpen(true);
+                    }}
+                    onFocus={() => setSearchDropdownOpen(true)}
+                    onBlur={() => {
+                      setTimeout(() => setSearchDropdownOpen(false), 200);
+                    }}
                     className="pr-10"
                   />
                   <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -333,13 +344,51 @@ const Retainers = () => {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => setNameFilter('')}
+                        onClick={() => { setNameFilter(''); setSearchDropdownOpen(false); }}
                         className="h-6 w-6 p-0 hover:bg-transparent"
                       >
                         <span className="text-muted-foreground hover:text-foreground">✕</span>
                       </Button>
                     ) : null}
                   </div>
+                  {searchDropdownOpen && (() => {
+                    const query = nameFilter.trim().toLowerCase();
+                    const suggestions = query
+                      ? leads.filter((lead) =>
+                          (lead.lawyer_full_name || '').toLowerCase().includes(query) ||
+                          (lead.phone_number || '').toLowerCase().includes(query) ||
+                          (lead.email || '').toLowerCase().includes(query) ||
+                          (lead.firm_name || '').toLowerCase().includes(query) ||
+                          (lead.submission_id || '').toLowerCase().includes(query)
+                        )
+                      : leads;
+                    const displayItems = suggestions.slice(0, 50);
+                    if (displayItems.length === 0) return null;
+                    return (
+                      <div className="absolute z-50 mt-1 max-h-64 w-full overflow-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
+                        {displayItems.map((lead) => (
+                          <button
+                            key={lead.id}
+                            type="button"
+                            className="w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground flex items-center justify-between gap-2"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setNameFilter(lead.lawyer_full_name || lead.phone_number || '');
+                              setSearchDropdownOpen(false);
+                            }}
+                          >
+                            <span className="truncate font-medium">{lead.lawyer_full_name || 'N/A'}</span>
+                            <span className="text-xs text-muted-foreground shrink-0">{lead.firm_name || ''}</span>
+                          </button>
+                        ))}
+                        {suggestions.length > 50 && (
+                          <div className="px-2 py-1.5 text-xs text-muted-foreground text-center">
+                            {suggestions.length - 50} more results...
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             </div>

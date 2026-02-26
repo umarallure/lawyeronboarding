@@ -5,6 +5,7 @@ import { ArrowLeft, Loader2, Pencil, Save, X } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { usePipelineStages } from "@/hooks/usePipelineStages";
 
 import { Button } from "@/components/ui/button";
@@ -51,16 +52,37 @@ const LawyerLeadDetailsPage = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const [record, setRecord] = useState<LawyerLead | null>(null);
   const [form, setForm] = useState<LawyerLead | null>(null);
 
   const pipelineName = record?.pipeline_name || "cold_call_pipeline";
   const { stages, loading: stagesLoading } = usePipelineStages(pipelineName);
+
+  useEffect(() => {
+    const checkAdmin = async () => {
+      if (!user?.id) return;
+      try {
+        const { data, error } = await (supabase as any)
+          .from('app_users')
+          .select('role')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (!error && data?.role && ['admin', 'super_admin'].includes(data.role)) {
+          setIsAdmin(true);
+        }
+      } catch (e) {
+        console.warn('Failed to check admin role', e);
+      }
+    };
+    checkAdmin();
+  }, [user]);
 
   useEffect(() => {
     const run = async () => {
@@ -229,7 +251,7 @@ const LawyerLeadDetailsPage = () => {
           </div>
         </div>
 
-        {/* {record && form && (
+          {isAdmin && record && form && (
           <div className="flex items-center gap-2">
             {!isEditing ? (
               <Button
@@ -271,7 +293,7 @@ const LawyerLeadDetailsPage = () => {
               </>
             )}
           </div>
-        )} */}
+        )}
       </div>
 
       {loading ? (

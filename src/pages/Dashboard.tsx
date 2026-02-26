@@ -27,12 +27,13 @@ import {
   startOfDay,
   startOfMonth,
   startOfWeek,
+  subDays,
   subMonths,
   subWeeks,
 } from 'date-fns';
 
 type DashboardStats = {
-  conversions: number;
+  onboarding: number;
   scheduledMeetings: number;
   signedAgreements: number;
   activeLawyers: number;
@@ -82,7 +83,7 @@ const getRangeBounds = (range: TimeRange) => {
 
 const Dashboard = () => {
   const [stats, setStats] = useState<DashboardStats>({
-    conversions: 0,
+    onboarding: 0,
     scheduledMeetings: 0,
     signedAgreements: 0,
     activeLawyers: 0,
@@ -154,21 +155,44 @@ const Dashboard = () => {
         .filter((s) => s.key.startsWith('active'))
         .map((s) => s.id);
 
-      const [scheduledMeetings, signedAgreements, activeLawyers] = await Promise.all([
+      const [scheduledMeetings, signedAgreements] = await Promise.all([
         countLawyerLeadsByStageIds(scheduledStageIds),
         countLawyerLeadsByStageIds(signedStageIds),
-        countLawyerLeadsByStageIds(activeStageIds),
       ]);
 
       if (cancelled) return;
 
-      const conversions = signedAgreements;
+      // Onboarding stat: total lawyers created in the lawyer portal (app_users table)
+      let onboarding = 0;
+      try {
+        const appUsersRes = await sb
+          .from('app_users')
+          .select('user_id', { count: 'exact', head: true });
+        onboarding = (appUsersRes?.count ?? 0) as number;
+      } catch (e) {
+        console.warn('Failed to fetch app_users count', e);
+      }
+
+      // Active Lawyers: distinct lawyers who created orders in the last 30 days
+      let activeLawyers = 0;
+      try {
+        const thirtyDaysAgo = subDays(new Date(), 30).toISOString();
+        const ordersRes = await sb
+          .from('orders')
+          .select('lawyer_id')
+          .gte('created_at', thirtyDaysAgo);
+        const orderRows = (ordersRes?.data ?? []) as Array<{ lawyer_id: string }>;
+        const uniqueLawyers = new Set(orderRows.map((r) => r.lawyer_id).filter(Boolean));
+        activeLawyers = uniqueLawyers.size;
+      } catch (e) {
+        console.warn('Failed to fetch active lawyers from orders', e);
+      }
 
       setStats({
         scheduledMeetings,
         signedAgreements,
         activeLawyers,
-        conversions,
+        onboarding,
       });
 
       const rows = (dealFlowRowsRes.data ?? []) as Array<{
@@ -245,10 +269,10 @@ const Dashboard = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Conversions</CardTitle>
+            <CardTitle className="text-sm">Onboarding</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-semibold">{stats.conversions}</div>
+            <div className="text-3xl font-semibold">{stats.onboarding}</div>
           </CardContent>
         </Card>
 
@@ -264,7 +288,7 @@ const Dashboard = () => {
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <CardTitle className="text-sm">Daily Outreach Report Trend ({getRangeLabel(timeRange)})</CardTitle>
+          <CardTitle className="text-sm">Acquisition Stats ({getRangeLabel(timeRange)})</CardTitle>
           <Select value={timeRange} onValueChange={(v) => setTimeRange(v as TimeRange)}>
             <SelectTrigger className="w-40">
               <SelectValue />

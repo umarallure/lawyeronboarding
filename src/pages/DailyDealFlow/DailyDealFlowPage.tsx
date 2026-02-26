@@ -1,6 +1,16 @@
+import { useState, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Mail, MessageCircle, PhoneCall, Users } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Mail, MessageCircle, PhoneCall, Users, Search } from "lucide-react";
 
 type OutreachMethod = "Email (Instantly)" | "DM (FlowChat)" | "Cold Call" | "Networking";
 
@@ -28,6 +38,9 @@ type MethodMeta = {
 };
 
 const DailyDealFlowPage = () => {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [platformFilter, setPlatformFilter] = useState<string>("all");
+
   const metrics: OutreachMetrics[] = [
     {
       method: "Email (Instantly)",
@@ -82,10 +95,49 @@ const DailyDealFlowPage = () => {
     },
   };
 
+  const filteredMetrics = useMemo(() => {
+    let filtered = metrics;
+    if (platformFilter !== "all") {
+      filtered = filtered.filter((m) => m.method === platformFilter);
+    }
+    if (searchTerm.trim()) {
+      const query = searchTerm.trim().toLowerCase();
+      filtered = filtered.filter((m) => m.method.toLowerCase().includes(query));
+    }
+    return filtered;
+  }, [searchTerm, platformFilter]);
+
   return (
     <div className="space-y-6 px-4 md:px-6">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative w-64">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search outreach methods..."
+            className="pl-9"
+          />
+        </div>
+        <Select value={platformFilter} onValueChange={(v) => setPlatformFilter(v)}>
+          <SelectTrigger className="w-56">
+            <SelectValue placeholder="All Platforms" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectItem value="all">All Platforms</SelectItem>
+              {metrics.map((m) => (
+                <SelectItem key={m.method} value={m.method}>
+                  {m.method}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {metrics.map((m) => {
+        {filteredMetrics.map((m) => {
           const meta = metaByMethod[m.method];
           const Icon = meta.icon;
           const conversionRate = m.output > 0 ? (m.conversion / m.output) * 100 : 0;

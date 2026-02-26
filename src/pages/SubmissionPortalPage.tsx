@@ -945,11 +945,11 @@ const SubmissionPortalPage = () => {
 
               <Select value={leadVendorFilter} onValueChange={(v) => setLeadVendorFilter(v)}>
                 <SelectTrigger className="w-56">
-                  <SelectValue placeholder="All Vendors" />
+                  <SelectValue placeholder="All Firms" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectItem value="__ALL__">All Vendors</SelectItem>
+                    <SelectItem value="__ALL__">All Firms</SelectItem>
                     {leadVendorOptions.map((vendor) => (
                       <SelectItem key={vendor} value={vendor}>
                         {vendor}
@@ -975,32 +975,7 @@ const SubmissionPortalPage = () => {
                 </SelectContent>
               </Select>
 
-              <Select value={dataCompletenessFilter} onValueChange={(v) => setDataCompletenessFilter(v)}>
-                <SelectTrigger className="w-56">
-                  <SelectValue placeholder="All Records" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="__ALL__">All Records</SelectItem>
-                    <SelectItem value="active_only">Active Only (Hide Missing Logs & Completed)</SelectItem>
-                    <SelectItem value="missing_logs_only">Missing Update Log Only</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-
               <Input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="w-56" />
-
-              <Select value={showDuplicates ? "true" : "false"} onValueChange={(v) => setShowDuplicates(v === "true")}>
-                <SelectTrigger className="w-56">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="true">Show All Records</SelectItem>
-                    <SelectItem value="false">Remove Duplicates</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
             </div>
 
             <div className="flex items-center gap-3">
