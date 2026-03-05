@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { format } from "date-fns";
 import { ArrowLeft, Loader2, Pencil, Save, X } from "lucide-react";
@@ -62,8 +62,30 @@ const LawyerLeadDetailsPage = () => {
   const [record, setRecord] = useState<LawyerLead | null>(null);
   const [form, setForm] = useState<LawyerLead | null>(null);
 
-  const pipelineName = record?.pipeline_name || "cold_call_pipeline";
+  const pipelineName = form?.pipeline_name || record?.pipeline_name || "cold_call_pipeline";
   const { stages, loading: stagesLoading } = usePipelineStages(pipelineName);
+
+  const prevPipelineRef = useRef<string>(pipelineName);
+
+  useEffect(() => {
+    if (!form) return;
+    if (stagesLoading) return;
+
+    const prevPipeline = prevPipelineRef.current;
+    const pipelineChanged = prevPipeline !== pipelineName;
+    prevPipelineRef.current = pipelineName;
+
+    if (!pipelineChanged) return;
+
+    const firstStageKey = stages[0]?.key;
+    setForm((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        stage_id: firstStageKey ?? null,
+      };
+    });
+  }, [pipelineName, stages, stagesLoading, form]);
 
   useEffect(() => {
     const checkAdmin = async () => {
@@ -463,14 +485,31 @@ const LawyerLeadDetailsPage = () => {
               <CardContent className="pt-6">
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <Field label="Pipeline">
-                    <div className="flex items-center h-9">
-                      <Badge variant="secondary" className="text-sm">
-                        {form.pipeline_name === "cold_call_pipeline" ? "Marketing Pipeline" : 
-                         form.pipeline_name === "lawyer_portal" ? "Lawyer Portal" : 
-                         form.pipeline_name === "submission_portal" ? "Submission Portal" : 
-                         form.pipeline_name || "Unknown"}
-                      </Badge>
-                    </div>
+                    {disabled ? (
+                      <div className="flex items-center h-9">
+                        <Badge variant="secondary" className="text-sm">
+                          {form.pipeline_name === "cold_call_pipeline" ? "Marketing Pipeline" :
+                            form.pipeline_name === "lawyer_portal" ? "Lawyer Portal" :
+                            form.pipeline_name === "submission_portal" ? "Submission Portal" :
+                            form.pipeline_name || "Unknown"}
+                        </Badge>
+                      </div>
+                    ) : (
+                      <Select
+                        value={form.pipeline_name || "cold_call_pipeline"}
+                        onValueChange={(value) => setString("pipeline_name", value)}
+                        disabled={saving}
+                      >
+                        <SelectTrigger className={inputCls}>
+                          <SelectValue placeholder="Select pipeline" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="cold_call_pipeline">Marketing Pipeline</SelectItem>
+                          <SelectItem value="lawyer_portal">Lawyer Portal</SelectItem>
+                          <SelectItem value="submission_portal">Submission Portal</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
                   </Field>
                   <Field label="Stage">
                     <Select

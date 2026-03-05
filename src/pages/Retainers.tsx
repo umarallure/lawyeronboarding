@@ -48,14 +48,15 @@ const Retainers = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { stages: portalStages } = usePipelineStages('cold_call_pipeline');
+  const { stages: coldCallStages } = usePipelineStages('cold_call_pipeline');
+  const { stages: lawyerPortalStages } = usePipelineStages('lawyer_portal');
+  const { stages: submissionPortalStages } = usePipelineStages('submission_portal');
   const [isAdmin, setIsAdmin] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [leads, setLeads] = useState<LawyerLead[]>([]);
   const [filteredLeads, setFilteredLeads] = useState<LawyerLead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
-  // Track which lead cards are expanded (show lawyer details)
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
   const [dateFilter, setDateFilter] = useState('');
   const [vendorFilter, setVendorFilter] = useState('all');
@@ -68,12 +69,13 @@ const Retainers = () => {
   const [itemsPerPage] = useState(10);
   const stageLabelById = useMemo(() => {
     const map = new Map<string, string>();
-    portalStages.forEach((stage) => {
+    const allStages = [...coldCallStages, ...lawyerPortalStages, ...submissionPortalStages];
+    allStages.forEach((stage) => {
       map.set(stage.id, stage.label);
       map.set(stage.key, stage.label);
     });
     return map;
-  }, [portalStages]);
+  }, [coldCallStages, lawyerPortalStages, submissionPortalStages]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -543,7 +545,7 @@ const Retainers = () => {
                               >
                                 {(lead.lawyer_full_name || 'N/A') + ' - ' + (lead.firm_name || 'N/A')}
                               </div>
-                              <Badge className={getStatusColor(getLeadStatus(lead))}>
+                              <Badge className={`${getStatusColor(getLeadStatus(lead))} pointer-events-none`}>
                                 {getLeadStatus(lead)}
                               </Badge>
                               <Button
