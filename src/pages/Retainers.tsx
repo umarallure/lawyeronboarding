@@ -6,12 +6,23 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Filter, Phone, User, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { Filter, Phone, User, ChevronDown, ChevronUp, Loader2, Trash2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { usePipelineStages } from '@/hooks/usePipelineStages';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface LawyerLead {
   id: string;
@@ -38,6 +49,8 @@ const Retainers = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { stages: portalStages } = usePipelineStages('cold_call_pipeline');
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [leads, setLeads] = useState<LawyerLead[]>([]);
   const [filteredLeads, setFilteredLeads] = useState<LawyerLead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -57,6 +70,7 @@ const Retainers = () => {
     const map = new Map<string, string>();
     portalStages.forEach((stage) => {
       map.set(stage.id, stage.label);
+      map.set(stage.key, stage.label);
     });
     return map;
   }, [portalStages]);
@@ -68,6 +82,83 @@ const Retainers = () => {
     
     return undefined;
   }, [user, loading, navigate]);
+
+  useEffect(() => {
+    const checkAdmin = async () => {
+      if (!user?.id) return;
+      try {
+        const appUsersQuery = supabase as unknown as {
+          from: (table: string) => {
+            select: (columns: string) => {
+              eq: (column: string, value: string) => {
+                maybeSingle: () => Promise<{ data: unknown; error: { message: string } | null }>;
+              };
+            };
+          };
+        };
+
+        const { data, error } = await appUsersQuery
+          .from('app_users')
+          .select('role')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        const typed = data as { role?: string } | null;
+        if (!error && typed?.role && ['admin', 'super_admin'].includes(typed.role)) {
+          setIsAdmin(true);
+        } else {
+          setIsAdmin(false);
+        }
+      } catch (e) {
+        console.warn('Failed to check admin role', e);
+        setIsAdmin(false);
+      }
+    };
+
+    checkAdmin();
+  }, [user]);
+
+  const handleDeleteLead = useCallback(
+    async (leadId: string) => {
+      try {
+        setDeletingId(leadId);
+
+        const client = supabase as unknown as {
+          from: (table: string) => {
+            delete: () => {
+              eq: (column: string, value: string) => Promise<{ error: { message: string } | null }>;
+            };
+          };
+        };
+
+        const { error } = await client.from('lawyer_leads').delete().eq('id', leadId);
+        if (error) {
+          toast({
+            title: 'Delete failed',
+            description: error.message,
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        setLeads((prev) => prev.filter((l) => l.id !== leadId));
+        toast({
+          title: 'Deleted',
+          description: 'Lead deleted successfully',
+        });
+      } catch (e) {
+        console.error('Error deleting lead:', e);
+        toast({
+          title: 'Delete failed',
+          description: 'An unexpected error occurred',
+          variant: 'destructive',
+        });
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [toast]
+  );
 
   const fetchVendors = useCallback(async () => {
     try {
@@ -438,7 +529,7 @@ const Retainers = () => {
                   {paginatedLeads.map((lead) => (
                     <Card 
                       key={lead.id} 
-                      className="hover:shadow-md transition-shadow cursor-pointer"
+                      className="group hover:shadow-md transition-shadow cursor-pointer"
                       onClick={() => navigate(`/lead-detail/${lead.id}`)}
                     >
                       <CardContent className="p-6">
@@ -511,6 +602,44 @@ const Retainers = () => {
                             )}
                           </div>
                           
+                          {isAdmin && (
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                    title="Delete lead"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete lead?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This action cannot be undone. This will permanently delete the lead.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        void handleDeleteLead(lead.id);
+                                      }}
+                                      disabled={deletingId === lead.id}
+                                      className="bg-red-500 hover:bg-red-600"
+                                    >
+                                      {deletingId === lead.id ? 'Deleting…' : 'Delete'}
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          )}
                         </div>
                       </CardContent>
                     </Card>

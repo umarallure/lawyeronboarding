@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,8 +21,6 @@ const NewCallback = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedPipeline, setSelectedPipeline] = useState<string>("cold_call_pipeline");
   const { stages: portalStages, loading: stagesLoading } = usePipelineStages(selectedPipeline);
-
-  // Form state
   const [lawyerFullName, setLawyerFullName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [email, setEmail] = useState("");
@@ -39,30 +37,34 @@ const NewCallback = () => {
   const [source, setSource] = useState("");
   const [campaignSoftware, setCampaignSoftware] = useState("");
   
-  // Generate unique submission ID
   const generateSubmissionId = () => {
     const timestamp = Date.now();
     const random = Math.floor(Math.random() * 1000000);
     return `LL${timestamp}${random}`;
   };
 
-  const activeStages = portalStages.filter((stage) => stage.is_active);
+  const activeStages = useMemo(
+    () => portalStages.filter((stage) => stage.is_active),
+    [portalStages]
+  );
 
   useEffect(() => {
-    if (activeStages.length > 0) {
+    if (activeStages.length === 0) return;
+
+    const hasSelectedStage = Boolean(stageId);
+    const stageStillValid = hasSelectedStage && activeStages.some((s) => s.key === stageId);
+
+    if (!stageStillValid) {
       const defaultStage = activeStages[0];
-      if (defaultStage?.id) {
-        setStageId(defaultStage.id);
-      }
+      if (defaultStage?.key) setStageId(defaultStage.key);
     }
-  }, [activeStages]);
+  }, [activeStages, stageId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
     try {
-      // Validate required fields
       if (!lawyerFullName || !phoneNumber) {
         toast({
           title: "Validation Error",
@@ -331,7 +333,7 @@ const NewCallback = () => {
                     </SelectTrigger>
                     <SelectContent>
                       {activeStages.map((stage) => (
-                        <SelectItem key={stage.id} value={stage.id}>
+                        <SelectItem key={stage.id} value={stage.key}>
                           {stage.label}
                         </SelectItem>
                       ))}

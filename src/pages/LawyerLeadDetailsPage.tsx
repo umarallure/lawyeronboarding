@@ -69,12 +69,24 @@ const LawyerLeadDetailsPage = () => {
     const checkAdmin = async () => {
       if (!user?.id) return;
       try {
-        const { data, error } = await (supabase as any)
-          .from('app_users')
-          .select('role')
-          .eq('user_id', user.id)
+        const appUsersQuery = supabase as unknown as {
+          from: (table: string) => {
+            select: (columns: string) => {
+              eq: (column: string, value: string) => {
+                maybeSingle: () => Promise<{ data: unknown; error: { message: string } | null }>;
+              };
+            };
+          };
+        };
+
+        const { data, error } = await appUsersQuery
+          .from("app_users")
+          .select("role")
+          .eq("user_id", user.id)
           .maybeSingle();
-        if (!error && data?.role && ['admin', 'super_admin'].includes(data.role)) {
+
+        const typed = data as { role?: string } | null;
+        if (!error && typed?.role && ["admin", "super_admin"].includes(typed.role)) {
           setIsAdmin(true);
         }
       } catch (e) {
@@ -102,7 +114,7 @@ const LawyerLeadDetailsPage = () => {
         from: (table: string) => {
           select: (columns: string) => {
             eq: (column: string, value: string) => {
-              maybeSingle: () => Promise<{ data: any | null; error: any }>;
+              maybeSingle: () => Promise<{ data: unknown | null; error: { message: string } | null }>;
             };
           };
         };
@@ -172,10 +184,10 @@ const LawyerLeadDetailsPage = () => {
 
       const lawyerLeadsUpdate = supabase as unknown as {
         from: (table: string) => {
-          update: (data: any) => {
+          update: (data: unknown) => {
             eq: (column: string, value: string) => {
               select: (columns: string) => {
-                single: () => Promise<{ data: any | null; error: any }>;
+                single: () => Promise<{ data: unknown | null; error: { message: string } | null }>;
               };
             };
           };
@@ -234,7 +246,8 @@ const LawyerLeadDetailsPage = () => {
 
   const inputCls = "h-9";
 
-  const currentStage = stages.find(s => s.id === form?.stage_id);
+  const currentStage = stages.find((s) => s.key === form?.stage_id) ?? stages.find((s) => s.id === form?.stage_id);
+  const stageSelectValue = currentStage?.key ?? (form?.stage_id || "__NONE__");
 
   return (
     <div className="space-y-4 px-4 md:px-6 pt-4">
@@ -461,7 +474,7 @@ const LawyerLeadDetailsPage = () => {
                   </Field>
                   <Field label="Stage">
                     <Select
-                      value={form.stage_id || "__NONE__"}
+                      value={stageSelectValue}
                       onValueChange={(value) => setString("stage_id", value === "__NONE__" ? "" : value)}
                       disabled={disabled || stagesLoading}
                     >
@@ -471,7 +484,7 @@ const LawyerLeadDetailsPage = () => {
                       <SelectContent>
                         <SelectItem value="__NONE__">Unassigned</SelectItem>
                         {stages.map((stage) => (
-                          <SelectItem key={stage.id} value={stage.id}>
+                          <SelectItem key={stage.id} value={stage.key}>
                             {stage.label}
                           </SelectItem>
                         ))}
