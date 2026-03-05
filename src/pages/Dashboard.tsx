@@ -105,7 +105,7 @@ const Dashboard = () => {
 
       const days = eachDayOfInterval({ start, end });
 
-      const sb: any = supabase;
+      const sb = supabase as unknown as typeof supabase;
 
       const [stagesRes, dealFlowRowsRes] = await Promise.all([
         sb
@@ -162,15 +162,15 @@ const Dashboard = () => {
 
       if (cancelled) return;
 
-      // Onboarding stat: total lawyers created in the lawyer portal (app_users table)
+      // Onboarding stat: total leads in the lawyer leads table
       let onboarding = 0;
       try {
-        const appUsersRes = await sb
-          .from('app_users')
-          .select('user_id', { count: 'exact', head: true });
-        onboarding = (appUsersRes?.count ?? 0) as number;
+        const leadsRes = await sb
+          .from('lawyer_leads')
+          .select('id', { count: 'exact', head: true });
+        onboarding = (leadsRes?.count ?? 0) as number;
       } catch (e) {
-        console.warn('Failed to fetch app_users count', e);
+        console.warn('Failed to fetch lawyer_leads count', e);
       }
 
       // Active Lawyers: distinct lawyers who created orders in the last 30 days
