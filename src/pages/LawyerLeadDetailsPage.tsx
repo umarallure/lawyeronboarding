@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { format } from "date-fns";
 import { ArrowLeft, Loader2, Pencil, Save, X } from "lucide-react";
@@ -48,6 +48,19 @@ const formatDateIfPresent = (value: string | null | undefined) => {
   return format(parsed, "MMM dd, yyyy");
 };
 
+const Field = ({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) => (
+  <div className="space-y-1">
+    <div className="text-sm font-medium text-muted-foreground">{label}</div>
+    {children}
+  </div>
+);
+
 const LawyerLeadDetailsPage = () => {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -64,6 +77,20 @@ const LawyerLeadDetailsPage = () => {
 
   const pipelineName = form?.pipeline_name || record?.pipeline_name || "cold_call_pipeline";
   const { stages, loading: stagesLoading } = usePipelineStages(pipelineName);
+
+  const { stages: coldCallStages } = usePipelineStages("cold_call_pipeline");
+  const { stages: lawyerPortalStages } = usePipelineStages("lawyer_portal");
+  const { stages: submissionPortalStages } = usePipelineStages("submission_portal");
+
+  const stageLabelByAnyId = useMemo(() => {
+    const map = new Map<string, string>();
+    const all = [...coldCallStages, ...lawyerPortalStages, ...submissionPortalStages];
+    all.forEach((s) => {
+      map.set(s.id, s.label);
+      map.set(s.key, s.label);
+    });
+    return map;
+  }, [coldCallStages, lawyerPortalStages, submissionPortalStages]);
 
   const prevPipelineRef = useRef<string>(pipelineName);
 
@@ -253,23 +280,12 @@ const LawyerLeadDetailsPage = () => {
 
   const disabled = !isEditing || saving;
 
-  const Field = ({
-    label,
-    children,
-  }: {
-    label: string;
-    children: React.ReactNode;
-  }) => (
-    <div className="space-y-1">
-      <div className="text-sm font-medium text-muted-foreground">{label}</div>
-      {children}
-    </div>
-  );
-
   const inputCls = "h-9";
 
   const currentStage = stages.find((s) => s.key === form?.stage_id) ?? stages.find((s) => s.id === form?.stage_id);
   const stageSelectValue = currentStage?.key ?? (form?.stage_id || "__NONE__");
+  const currentStageLabel = stageLabelByAnyId.get(form?.stage_id || "") || form?.stage_id || "";
+  const isCurrentStageInOptions = Boolean(currentStage) || stages.some((s) => s.key === form?.stage_id || s.id === form?.stage_id);
 
   return (
     <div className="space-y-4 px-4 md:px-6 pt-4">
@@ -522,6 +538,9 @@ const LawyerLeadDetailsPage = () => {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__NONE__">Unassigned</SelectItem>
+                        {!stagesLoading && form?.stage_id && !isCurrentStageInOptions && (
+                          <SelectItem value={form.stage_id}>{currentStageLabel}</SelectItem>
+                        )}
                         {stages.map((stage) => (
                           <SelectItem key={stage.id} value={stage.key}>
                             {stage.label}
