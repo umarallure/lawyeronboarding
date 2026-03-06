@@ -24,7 +24,6 @@ import TransferPortalPage from "./pages/TransferPortalPage";
 import SubmissionPortalPage from "./pages/SubmissionPortalPage";
 import RetainersKanbanPage from "./pages/RetainersKanbanPage";
 import BulkLookupPage from "./pages/BulkLookupPage";
-import GHLSyncPage from "./pages/GHLSyncPage/GHLSyncPage";
 import SalesMapPage from "./pages/SalesMapPage";
 import OrderFulfillmentPage from "./pages/OrderFulfillmentPage";
 import OrderFulfillmentAssignPage from "./pages/OrderFulfillmentAssignPage";
@@ -38,6 +37,8 @@ import TaskDetailView from "./pages/TaskDetailView";
 import RetentionTasksView from "./pages/RetentionTasksView";
 import AdminAnalytics from "./pages/AdminAnalytics";
 import UserManagement from "./pages/UserManagement";
+import MarketingTeamPage from "./pages/MarketingTeamPage";
+import LeadAssignmentPage from "./pages/LeadAssignmentPage";
 import AppShell from "@/components/layout/AppShell";
 import { Navigate } from "react-router-dom";
 
@@ -133,6 +134,28 @@ const App = () => (
                   </AppShell>
                 </ProtectedRoute>
               } 
+            />
+
+            <Route
+              path="/marketing-team"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Marketing Team">
+                    <MarketingTeamPage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/lead-assignment"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Lead Assignment">
+                    <LeadAssignmentPage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
             />
             <Route 
               path="/center-lead-portal" 
@@ -298,16 +321,6 @@ const App = () => (
                 <ProtectedRoute>
                   <AppShell title="Deal Flow Lookup">
                     <DealFlowLookup />
-                  </AppShell>
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/ghl-sync" 
-              element={
-                <ProtectedRoute>
-                  <AppShell title="GHL Sync">
-                    <GHLSyncPage />
                   </AppShell>
                 </ProtectedRoute>
               } 

@@ -30,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 type NavItem = {
   label: string;
@@ -85,6 +86,47 @@ const AppShell = ({
   });
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+
+  useEffect(() => {
+    const run = async () => {
+      if (!user?.id) {
+        setIsSuperAdmin(false);
+        return;
+      }
+
+      try {
+        const client = supabase as unknown as {
+          from: (table: string) => {
+            select: (cols: string) => {
+              eq: (col: string, v: string) => {
+                maybeSingle: () => Promise<{ data: unknown | null; error: { message: string } | null }>;
+              };
+            };
+          };
+        };
+
+        const { data, error } = await client
+          .from('app_users')
+          .select('role,is_super_admin')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        const typed = data as { role?: string | null; is_super_admin?: boolean } | null;
+        if (error) {
+          setIsSuperAdmin(false);
+          return;
+        }
+
+        setIsSuperAdmin(Boolean(typed?.is_super_admin) || typed?.role === 'super_admin');
+      } catch {
+        setIsSuperAdmin(false);
+      }
+    };
+
+    void run();
+  }, [user?.id]);
 
   useEffect(() => {
     // Keep the persisted state aligned for Daily Outreach Report routes that don't force a default.
@@ -156,6 +198,18 @@ const AppShell = ({
         icon: <LayoutDashboard className="h-4 w-4 text-current" />,
       },
       {
+        label: 'Marketing Team',
+        to: '/marketing-team',
+        icon: <Users className="h-4 w-4 text-current" />,
+        show: isSuperAdmin,
+      },
+      {
+        label: 'Lead Assignment',
+        to: '/lead-assignment',
+        icon: <Users className="h-4 w-4 text-current" />,
+        show: isSuperAdmin,
+      },
+      {
         label: 'Lawyers',
         to: '/leads',
         icon: <Users className="h-4 w-4 text-current" />,
@@ -179,7 +233,7 @@ const AppShell = ({
     ];
 
     return items.filter((i) => i.show !== false);
-  }, []);
+  }, [isSuperAdmin]);
 
   const handleSignOut = async () => {
     await signOut();

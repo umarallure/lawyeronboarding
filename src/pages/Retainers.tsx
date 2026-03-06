@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -42,7 +42,20 @@ interface LawyerLead {
   email: string | null;
   additional_notes: string | null;
   stage_id: string | null;
+  assigned_user_id?: string | null;
 }
+
+type MarketingTeamMember = {
+  user_id: string;
+  display_name: string;
+  email: string;
+};
+
+type AssigneeUser = {
+  user_id: string;
+  display_name: string | null;
+  email: string;
+};
 
 const Retainers = () => {
   const { user, loading } = useAuth();
@@ -62,6 +75,10 @@ const Retainers = () => {
   const [vendorFilter, setVendorFilter] = useState('all');
   const [vendorOptions, setVendorOptions] = useState<string[]>(['all']);
   const [nameFilter, setNameFilter] = useState('');
+  const [assigneeFilter, setAssigneeFilter] = useState<string>('all');
+  const [marketingTeam, setMarketingTeam] = useState<MarketingTeamMember[]>([]);
+  const [assigneeById, setAssigneeById] = useState<Record<string, AssigneeUser>>({});
+  const didInitAssigneeFilter = useRef(false);
   const [searchDropdownOpen, setSearchDropdownOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchDropdownRef = useRef<HTMLDivElement>(null);
@@ -119,6 +136,15 @@ const Retainers = () => {
 
     checkAdmin();
   }, [user]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    if (didInitAssigneeFilter.current) return;
+    if (!isAdmin) {
+      setAssigneeFilter(user.id);
+    }
+    didInitAssigneeFilter.current = true;
+  }, [isAdmin, user?.id]);
 
   const handleDeleteLead = useCallback(
     async (leadId: string) => {
@@ -196,10 +222,62 @@ const Retainers = () => {
     }
   }, []);
 
+  const fetchMarketingTeam = useCallback(async () => {
+    try {
+      const sb = supabase as unknown as {
+        from: (table: string) => {
+          select: (cols: string) => {
+            order: (col: string, opts: { ascending: boolean }) => Promise<{ data: unknown[] | null; error: { message: string } | null }>;
+            in: (col: string, values: string[]) => Promise<{ data: unknown[] | null; error: { message: string } | null }>;
+          };
+        };
+      };
+
+      const teamRes = await sb.from('marketing_team').select('user_id,created_at').order('created_at', { ascending: false });
+      if (teamRes.error) throw teamRes.error;
+
+      const teamRows = (teamRes.data ?? []) as Array<{ user_id: string }>;
+      const teamUserIds = teamRows.map((r) => r.user_id).filter(Boolean);
+
+      if (teamUserIds.length === 0) {
+        setMarketingTeam([]);
+        return;
+      }
+
+      const usersRes = await sb.from('app_users').select('user_id,email,display_name').in('user_id', teamUserIds);
+      if (usersRes.error) throw usersRes.error;
+
+      const users = (usersRes.data ?? []) as Array<{ user_id: string; email: string; display_name: string | null }>;
+      const userById = new Map(users.map((u) => [u.user_id, u] as const));
+
+      const members = teamUserIds
+        .map((id) => {
+          const u = userById.get(id);
+          if (!u) return null;
+          return {
+            user_id: id,
+            email: u.email,
+            display_name: (u.display_name || '').trim() || u.email,
+          } satisfies MarketingTeamMember;
+        })
+        .filter(Boolean) as MarketingTeamMember[];
+
+      members.sort((a, b) => a.display_name.localeCompare(b.display_name));
+      setMarketingTeam(members);
+    } catch (e) {
+      console.warn('Failed to fetch marketing team', e);
+      setMarketingTeam([]);
+    }
+  }, []);
+
   const applyFilters = useCallback(() => {
     const searchLower = nameFilter.trim().toLowerCase();
 
     let filtered = leads;
+
+    if (assigneeFilter !== 'all') {
+      filtered = filtered.filter((lead) => (lead.assigned_user_id || '') === assigneeFilter);
+    }
 
     if (dateFilter) {
       filtered = filtered.filter((lead) => lead.created_at?.startsWith(dateFilter));
@@ -223,7 +301,7 @@ const Retainers = () => {
     }
 
     setFilteredLeads(filtered);
-  }, [dateFilter, vendorFilter, nameFilter, leads]);
+  }, [dateFilter, vendorFilter, nameFilter, leads, assigneeFilter]);
 
   useEffect(() => {
     applyFilters();
@@ -295,8 +373,48 @@ const Retainers = () => {
     if (user) {
       fetchLeads();
       fetchVendors();
+      fetchMarketingTeam();
     }
-  }, [user, fetchLeads, fetchVendors]);
+  }, [user, fetchLeads, fetchVendors, fetchMarketingTeam]);
+
+  useEffect(() => {
+    const loadAssignees = async () => {
+      const ids = Array.from(new Set(leads.map((l) => (l.assigned_user_id || '').trim()).filter(Boolean)));
+      if (ids.length === 0) {
+        setAssigneeById({});
+        return;
+      }
+
+      try {
+        const sb = supabase as unknown as {
+          from: (table: string) => {
+            select: (cols: string) => {
+              in: (column: string, values: string[]) => Promise<{ data: unknown; error: { message: string } | null }>;
+            };
+          };
+        };
+
+        const { data, error } = await sb
+          .from('app_users')
+          .select('user_id,display_name,email')
+          .in('user_id', ids);
+
+        if (error) throw error;
+
+        const rows = (data as AssigneeUser[] | null) ?? [];
+        const next: Record<string, AssigneeUser> = {};
+        rows.forEach((r) => {
+          if (r?.user_id) next[r.user_id] = r;
+        });
+        setAssigneeById(next);
+      } catch (e) {
+        console.warn('Failed to fetch assignee users', e);
+        setAssigneeById({});
+      }
+    };
+
+    void loadAssignees();
+  }, [leads]);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -386,7 +504,7 @@ const Retainers = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="date-filter">Date</Label>
                 <Input
@@ -484,6 +602,24 @@ const Retainers = () => {
                   })()}
                 </div>
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="assignee-filter">Assignee</Label>
+                <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
+                  <SelectTrigger id="assignee-filter">
+                    <SelectValue placeholder="All" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {user?.id ? <SelectItem value={user.id}>My Leads</SelectItem> : null}
+                    {marketingTeam.map((m) => (
+                      <SelectItem key={m.user_id} value={m.user_id}>
+                        {m.display_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -571,12 +707,20 @@ const Retainers = () => {
                             </div>
                             
                             {/* Basic Lead Info (simplified) */}
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-muted-foreground">
+                            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm text-muted-foreground">
                               <div>
                                 <span className="font-medium">Phone:</span> {lead.phone_number || 'N/A'}
                               </div>
                               <div>
                                 <span className="font-medium">Email:</span> {lead.email || 'N/A'}
+                              </div>
+                              <div>
+                                <span className="font-medium">Assigned to:</span>{' '}
+                                {lead.assigned_user_id
+                                  ? ((assigneeById[lead.assigned_user_id]?.display_name || '').trim() ||
+                                      assigneeById[lead.assigned_user_id]?.email ||
+                                      lead.assigned_user_id)
+                                  : 'Unassigned'}
                               </div>
                               <div>
                                 <span className="font-medium">City / State:</span> {lead.city || 'N/A'}{lead.city && lead.state ? `, ${lead.state}` : ''}

@@ -15,6 +15,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type LawyerLead = {
   id: string;
@@ -39,6 +47,15 @@ type LawyerLead = {
   campaign_software: string | null;
   created_at: string | null;
   updated_at: string | null;
+};
+
+type LawyerLeadNote = {
+  id: string;
+  lead_id: string;
+  note: string;
+  created_at: string;
+  created_by: string | null;
+  created_by_name: string | null;
 };
 
 const formatDateIfPresent = (value: string | null | undefined) => {
@@ -74,6 +91,12 @@ const LawyerLeadDetailsPage = () => {
 
   const [record, setRecord] = useState<LawyerLead | null>(null);
   const [form, setForm] = useState<LawyerLead | null>(null);
+
+  const [notes, setNotes] = useState<LawyerLeadNote[]>([]);
+  const [notesLoading, setNotesLoading] = useState(false);
+  const [addNoteOpen, setAddNoteOpen] = useState(false);
+  const [addNoteText, setAddNoteText] = useState("");
+  const [addNoteSaving, setAddNoteSaving] = useState(false);
 
   const pipelineName = form?.pipeline_name || record?.pipeline_name || "cold_call_pipeline";
   const { stages, loading: stagesLoading } = usePipelineStages(pipelineName);
@@ -208,6 +231,128 @@ const LawyerLeadDetailsPage = () => {
 
     run();
   }, [id, toast]);
+
+  const fetchNotes = async (leadId: string) => {
+    setNotesLoading(true);
+    try {
+      const client = supabase as unknown as {
+        from: (table: string) => {
+          select: (cols: string) => {
+            eq: (col: string, value: string) => {
+              order: (col2: string, opts: { ascending: boolean }) => Promise<{ data: unknown; error: { message: string } | null }>;
+            };
+          };
+        };
+      };
+
+      const { data, error } = await client
+        .from("lawyer_lead_notes")
+        .select("id, lead_id, note, created_at, created_by, created_by_name")
+        .eq("lead_id", leadId)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setNotes(((data as LawyerLeadNote[]) || []).filter(Boolean));
+    } catch (e) {
+      console.warn("Failed to fetch lead notes", e);
+      setNotes([]);
+    } finally {
+      setNotesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!record?.id) return;
+    void fetchNotes(record.id);
+  }, [record?.id]);
+
+  const resolveCurrentUserName = async () => {
+    if (!user?.id) return null;
+    try {
+      const client = supabase as unknown as {
+        from: (table: string) => {
+          select: (cols: string) => {
+            eq: (col: string, value: string) => {
+              maybeSingle: () => Promise<{ data: unknown; error: { message: string } | null }>;
+            };
+          };
+        };
+      };
+
+      const { data, error } = await client
+        .from("app_users")
+        .select("display_name,email")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      const typed = data as { display_name?: string | null; email?: string | null } | null;
+      const name = (typed?.display_name || "").trim();
+      return name || (typed?.email || null);
+    } catch (e) {
+      console.warn("Failed to resolve current user name", e);
+      return null;
+    }
+  };
+
+  const handleAddNote = async () => {
+    if (!record?.id) return;
+    if (!user?.id) {
+      toast({
+        title: "Not signed in",
+        description: "Please sign in again to add a note.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const note = addNoteText.trim();
+    if (!note) return;
+
+    setAddNoteSaving(true);
+    try {
+      const createdByName = await resolveCurrentUserName();
+
+      const client = supabase as unknown as {
+        from: (table: string) => {
+          insert: (rows: unknown) => {
+            select: (cols: string) => {
+              single: () => Promise<{ data: unknown; error: { message: string } | null }>;
+            };
+          };
+        };
+      };
+
+      const { data, error } = await client
+        .from("lawyer_lead_notes")
+        .insert({
+          lead_id: record.id,
+          note,
+          created_by: user.id,
+          created_by_name: createdByName,
+        })
+        .select("id, lead_id, note, created_at, created_by, created_by_name")
+        .single();
+
+      if (error) throw error;
+
+      const typed = data as LawyerLeadNote;
+      setNotes((prev) => [typed, ...prev]);
+      setAddNoteText("");
+      setAddNoteOpen(false);
+      toast({ title: "Note added" });
+    } catch (e) {
+      console.warn("Failed to add note", e);
+      toast({
+        title: "Failed to add note",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setAddNoteSaving(false);
+    }
+  };
 
   const setString = (key: keyof LawyerLead, value: string) => {
     setForm((prev) => {
@@ -572,6 +717,89 @@ const LawyerLeadDetailsPage = () => {
                     className="min-h-[200px]"
                   />
                 </Field>
+
+                <div className="mt-6 flex items-center justify-between gap-3">
+                  <div className="text-sm font-medium text-foreground">Notes</div>
+                  <Button
+                    size="sm"
+                    onClick={() => setAddNoteOpen(true)}
+                    disabled={!user?.id}
+                  >
+                    Add Note
+                  </Button>
+                </div>
+
+                {notesLoading ? (
+                  <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading notes…
+                  </div>
+                ) : notes.length === 0 ? (
+                  <div className="mt-3 text-sm text-muted-foreground">No notes yet.</div>
+                ) : (
+                  <div className="mt-3 space-y-3">
+                    {notes.map((n) => {
+                      const author = (n.created_by_name || "").trim() || n.created_by || "Unknown";
+                      const dateText = n.created_at ? format(new Date(n.created_at), "PPpp") : "";
+                      return (
+                        <div key={n.id} className="rounded-md border p-3">
+                          <div className="text-sm text-muted-foreground mb-1">
+                            <span className="font-medium text-foreground">{author}</span>
+                            {dateText ? (
+                              <>
+                                <span className="mx-1">•</span>
+                                <span>{dateText}</span>
+                              </>
+                            ) : null}
+                          </div>
+                          <div className="whitespace-pre-wrap text-sm text-foreground">{n.note}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <Dialog open={addNoteOpen} onOpenChange={setAddNoteOpen}>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Add note</DialogTitle>
+                      <DialogDescription>
+                        Add a note to this lead. It will be saved with your name.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-2">
+                      <Textarea
+                        value={addNoteText}
+                        onChange={(e) => setAddNoteText(e.target.value)}
+                        className="min-h-[120px]"
+                        placeholder="Write your note..."
+                        disabled={addNoteSaving}
+                      />
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={() => setAddNoteOpen(false)}
+                        disabled={addNoteSaving}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={() => void handleAddNote()}
+                        disabled={addNoteSaving || addNoteText.trim().length === 0}
+                      >
+                        {addNoteSaving ? (
+                          <span className="flex items-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Saving…
+                          </span>
+                        ) : (
+                          "Save"
+                        )}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </CardContent>
             </Card>
           </TabsContent>

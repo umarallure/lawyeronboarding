@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +26,7 @@ import { Loader2, RefreshCw, Pencil, StickyNote } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAttorneys } from "@/hooks/useAttorneys";
 import { usePipelineStages, type PipelineStage } from "@/hooks/usePipelineStages";
+import { useAuth } from "@/hooks/useAuth";
 import {
   parseStageLabel,
   deriveParentStages,
@@ -45,6 +46,8 @@ export interface SubmissionPortalRow {
   agent?: string;
   licensed_agent_account?: string;
   assigned_attorney_id?: string | null;
+  stage_id?: string | null;
+  assigned_user_id?: string | null;
   status?: string;
   call_result?: string;
   carrier?: string;
@@ -78,8 +81,15 @@ interface CallLog {
   created_at: string;
 }
 
+type MarketingTeamMember = {
+  user_id: string;
+  display_name: string;
+  email: string;
+};
+
 const SubmissionPortalPage = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   // --- Dynamic pipeline stages from DB ---
   const { stages: dbSubmissionStages, loading: stagesLoading } = usePipelineStages("lawyer_portal");
@@ -108,11 +118,19 @@ const SubmissionPortalPage = () => {
     return map;
   }, [parentStages]);
 
-  const deriveStageKey = (row: SubmissionPortalRow): string => {
-    const status = (row.status || '').trim();
-    if (!status) return parentStages[0]?.key ?? '';
-    return deriveParentKey(status, dbSubmissionStages, parentStages);
-  };
+  const deriveStageKey = useCallback((row: SubmissionPortalRow): string => {
+    const stageId = (row.stage_id || '').trim();
+    if (!stageId) return parentStages[0]?.key ?? '';
+
+    const asKey = dbSubmissionStages.find((s) => s.key === stageId);
+    if (asKey?.key) return asKey.key;
+
+    const legacy = dbSubmissionStages.find((s) => s.id === stageId);
+    if (legacy?.key) return legacy.key;
+
+    if (parentStages.some((s) => s.key === stageId)) return stageId;
+    return parentStages[0]?.key ?? '';
+  }, [dbSubmissionStages, parentStages]);
 
   const handleKanbanDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     if (!draggingId) return;
@@ -136,13 +154,7 @@ const SubmissionPortalPage = () => {
   };
 
   const getStatusForStage = (stageKey: string) => {
-    const parent = parentStages.find((s) => s.key === stageKey);
-    if (!parent) return parentStages[0]?.label ?? '';
-    // If the parent has reasons, default to the first reason sub-stage
-    if (parent.reasons.length > 0) {
-      return buildStatusLabel(parent.label, parent.reasons[0]);
-    }
-    return parent.label;
+    return stageKey;
   };
 
   const buildAllowedStatuses = () => {
@@ -167,6 +179,11 @@ const SubmissionPortalPage = () => {
   const [columnPage, setColumnPage] = useState<Record<string, number>>({});
   const [noteCounts, setNoteCounts] = useState<Record<string, number>>({});
 
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
+  const [marketingTeam, setMarketingTeam] = useState<MarketingTeamMember[]>([]);
+  const [didInitAssigneeFilter, setDidInitAssigneeFilter] = useState(false);
+
   const [editOpen, setEditOpen] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [editRow, setEditRow] = useState<SubmissionPortalRow | null>(null);
@@ -190,7 +207,7 @@ const SubmissionPortalPage = () => {
   }, [attorneys]);
 
   // Remove duplicates based on insured_name, client_phone_number, and lead_vendor
-  const removeDuplicates = (records: SubmissionPortalRow[]): SubmissionPortalRow[] => {
+  const removeDuplicates = useCallback((records: SubmissionPortalRow[]): SubmissionPortalRow[] => {
     const seen = new Map<string, SubmissionPortalRow>();
     
     records.forEach(record => {
@@ -203,11 +220,15 @@ const SubmissionPortalPage = () => {
     });
     
     return Array.from(seen.values());
-  };
+  }, []);
 
   // Apply filters and duplicate removal
-  const applyFilters = (records: SubmissionPortalRow[]): SubmissionPortalRow[] => {
+  const applyFilters = useCallback((records: SubmissionPortalRow[]): SubmissionPortalRow[] => {
     let filtered = records;
+
+    if (assigneeFilter !== '__ALL__' && assigneeFilter !== 'all') {
+      filtered = filtered.filter((record) => (record.assigned_user_id || '') === assigneeFilter);
+    }
 
     // Apply date filter
     if (dateFilter) {
@@ -216,7 +237,7 @@ const SubmissionPortalPage = () => {
 
     // Apply status filter
     if (statusFilter !== "__ALL__") {
-      filtered = filtered.filter(record => record.status === statusFilter);
+      filtered = filtered.filter((record) => (record.status || '') === statusFilter);
     }
 
     // Apply lead vendor filter
@@ -240,24 +261,105 @@ const SubmissionPortalPage = () => {
     }
 
     // Remove duplicates if enabled
-    if (!showDuplicates) {
-      filtered = removeDuplicates(filtered);
-    }
+    if (!showDuplicates) filtered = removeDuplicates(filtered);
 
     // Apply data completeness filter
-    if (dataCompletenessFilter === "active_only") {
-      filtered = filtered.filter(record => 
-        record.has_submission_data && 
-        record.status !== "Submitted"
-      );
-    } else if (dataCompletenessFilter === "missing_logs_only") {
-      filtered = filtered.filter(record => 
-        !record.has_submission_data
-      );
-    }
+    // dataCompletenessFilter is based on the old merged submission_portal flow.
+    // lawyer_leads rows do not include those fields, so keep behavior as a no-op.
 
     return filtered;
-  };
+  }, [assigneeFilter, dateFilter, leadVendorFilter, removeDuplicates, searchTerm, showDuplicates, statusFilter]);
+
+  const fetchMarketingTeam = useCallback(async () => {
+    try {
+      const sb = supabase as unknown as {
+        from: (table: string) => {
+          select: (cols: string) => {
+            order: (col: string, opts: { ascending: boolean }) => Promise<{ data: unknown; error: { message?: string } | null }>;
+            in: (col: string, values: string[]) => Promise<{ data: unknown; error: { message?: string } | null }>;
+          };
+        };
+      };
+
+      const teamRes = await sb.from('marketing_team').select('user_id,created_at').order('created_at', { ascending: false });
+      if (teamRes.error) throw teamRes.error;
+
+      const teamRows = (teamRes.data ?? []) as Array<{ user_id: string }>;
+      const ids = teamRows.map((r) => r.user_id).filter(Boolean);
+      if (ids.length === 0) {
+        setMarketingTeam([]);
+        return;
+      }
+
+      const usersRes = await sb.from('app_users').select('user_id,email,display_name').in('user_id', ids);
+      if (usersRes.error) throw usersRes.error;
+
+      const users = (usersRes.data ?? []) as Array<{ user_id: string; email: string; display_name: string | null }>;
+      const userById = new Map(users.map((u) => [u.user_id, u] as const));
+
+      const members = ids
+        .map((id) => {
+          const u = userById.get(id);
+          if (!u) return null;
+          return {
+            user_id: id,
+            email: u.email,
+            display_name: (u.display_name || '').trim() || u.email,
+          } satisfies MarketingTeamMember;
+        })
+        .filter(Boolean) as MarketingTeamMember[];
+
+      members.sort((a, b) => a.display_name.localeCompare(b.display_name));
+      setMarketingTeam(members);
+    } catch (e) {
+      console.warn('Failed to fetch marketing team', e);
+      setMarketingTeam([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    const checkAdmin = async () => {
+      if (!user?.id) return;
+      try {
+        const appUsersQuery = supabase as unknown as {
+          from: (table: string) => {
+            select: (columns: string) => {
+              eq: (column: string, value: string) => {
+                maybeSingle: () => Promise<{ data: unknown; error: { message: string } | null }>;
+              };
+            };
+          };
+        };
+
+        const { data, error } = await appUsersQuery
+          .from('app_users')
+          .select('role')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        const typed = data as { role?: string } | null;
+        if (!error && typed?.role && ['admin', 'super_admin'].includes(typed.role)) {
+          setIsAdmin(true);
+        } else {
+          setIsAdmin(false);
+        }
+      } catch (e) {
+        console.warn('Failed to check admin role', e);
+        setIsAdmin(false);
+      }
+    };
+
+    void checkAdmin();
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    if (didInitAssigneeFilter) return;
+    if (!isAdmin) {
+      setAssigneeFilter(user.id);
+    }
+    setDidInitAssigneeFilter(true);
+  }, [didInitAssigneeFilter, isAdmin, user?.id]);
 
   const leadVendorOptions = useMemo(() => {
     const set = new Set<string>();
@@ -269,25 +371,32 @@ const SubmissionPortalPage = () => {
   }, [data]);
 
   // Function to generate verification log summary showing complete call workflow
-  const generateVerificationLogSummary = (logs: CallLog[], submission?: any): string => {
+  const generateVerificationLogSummary = (logs: CallLog[], submission?: unknown): string => {
     if (!logs || logs.length === 0) {
       // Fallback to data from submission/call_results table if available
-      if (submission && submission.has_submission_data) {
+      const maybeSubmission = submission as {
+        has_submission_data?: boolean;
+        buffer_agent?: string | null;
+        agent?: string | null;
+        agent_who_took_call?: string | null;
+        licensed_agent_account?: string | null;
+      };
+      if (maybeSubmission && maybeSubmission.has_submission_data) {
         const workflow = [];
         
-        if (submission.buffer_agent) {
-          workflow.push(`🟡 Buffer: ${submission.buffer_agent}`);
+        if (maybeSubmission.buffer_agent) {
+          workflow.push(`🟡 Buffer: ${maybeSubmission.buffer_agent}`);
         }
         
-        if (submission.agent && submission.agent !== submission.buffer_agent) {
-          workflow.push(`📞 Handled by: ${submission.agent}`);
+        if (maybeSubmission.agent && maybeSubmission.agent !== maybeSubmission.buffer_agent) {
+          workflow.push(`📞 Handled by: ${maybeSubmission.agent}`);
         }
         
-        if (submission.licensed_agent_account) {
-          if (submission.buffer_agent || submission.agent_who_took_call) {
+        if (maybeSubmission.licensed_agent_account) {
+          if (maybeSubmission.buffer_agent || maybeSubmission.agent_who_took_call) {
             workflow.push(`➡️ Transfer to Licensed`);
           }
-          workflow.push(`🔵 Licensed: ${submission.licensed_agent_account}`);
+          workflow.push(`🔵 Licensed: ${maybeSubmission.licensed_agent_account}`);
         }
         
         if (workflow.length > 0) {
@@ -392,173 +501,72 @@ const SubmissionPortalPage = () => {
     return workflow.join(" → ");
   };
 
-  // Fetch data from Supabase - get all transfers and merge with submission data
-  const fetchData = async (showRefreshToast = false) => {
+  // Fetch data from Supabase
+  const fetchData = useCallback(async (showRefreshToast = false) => {
     try {
       setRefreshing(true);
 
-      const allowedStatuses = buildAllowedStatuses();
+      type QueryRes = { data: unknown[] | null; error: { message?: string } | null };
 
-      let transfersQuery = supabase
-        .from('daily_deal_flow')
-        .select('*')
-        .in('status', allowedStatuses)
-        .order('date', { ascending: false })
+      const lawyerLeadsQuery = supabase as unknown as {
+        from: (table: string) => {
+          select: (columns: string) => {
+            eq: (column: string, value: string) => {
+              order: (column: string, options: { ascending: boolean }) => Promise<QueryRes>;
+            };
+          };
+        };
+      };
+
+      const { data: leadsRaw, error: leadsErr } = await lawyerLeadsQuery
+        .from('lawyer_leads')
+        .select('id,submission_id,lawyer_full_name,firm_name,phone_number,stage_id,submission_date,created_at,additional_notes,assigned_user_id')
+        .eq('pipeline_name', 'lawyer_portal')
         .order('created_at', { ascending: false });
 
-      if (dateFilter) {
-        transfersQuery = transfersQuery.eq('date', dateFilter);
-      }
-
-      const { data: transferData, error: transferError } = await transfersQuery;
-
-      if (transferError) {
-        console.error("Error fetching lawyer portal base transfers:", transferError);
+      if (leadsErr) {
+        console.error('Error fetching lawyer portal leads:', leadsErr);
         toast({
-          title: "Error",
-          description: "Failed to fetch transfer portal data",
-          variant: "destructive",
+          title: 'Error',
+          description: 'Failed to fetch lawyer portal data',
+          variant: 'destructive',
         });
         return;
       }
 
-      // Get lawyer portal data for entries that exist
-      let submissionQuery = (supabase as any)
-        .from('submission_portal')
-        .select('*');
+      const leads = ((leadsRaw ?? []) as unknown as Array<{
+        id: string;
+        submission_id: string;
+        lawyer_full_name: string | null;
+        firm_name: string | null;
+        phone_number: string | null;
+        stage_id: string | null;
+        submission_date: string | null;
+        created_at: string | null;
+        additional_notes: string | null;
+        assigned_user_id?: string | null;
+      }>);
 
-      submissionQuery = submissionQuery.in('status', allowedStatuses);
+      const mapped: SubmissionPortalRow[] = leads.map((l) => ({
+        id: l.id,
+        submission_id: l.submission_id,
+        insured_name: l.lawyer_full_name ?? undefined,
+        client_phone_number: l.phone_number ?? undefined,
+        lead_vendor: l.firm_name ?? undefined,
+        stage_id: l.stage_id,
+        assigned_user_id: l.assigned_user_id ?? null,
+        status:
+          dbSubmissionStages.find((s) => s.key === (l.stage_id || ''))?.label ||
+          dbSubmissionStages.find((s) => s.id === (l.stage_id || ''))?.label ||
+          undefined,
+        submission_date: l.submission_date ?? undefined,
+        created_at: l.created_at ?? undefined,
+        notes: l.additional_notes ?? undefined,
+        date: (l.submission_date || l.created_at || '').slice(0, 10) || undefined,
+      }));
 
-      // Apply date filter if set
-      if (dateFilter) {
-        submissionQuery = submissionQuery.eq('date', dateFilter);
-      }
-
-      // Note: We don't apply status filter here to ensure all submission data is available
-      // for merging with transfer data, regardless of current filter selection
-
-      const { data: submissionDataRaw, error: submissionError } = await submissionQuery;
-
-      if (submissionError) {
-        console.warn("Error fetching lawyer portal data:", submissionError);
-        // Continue with just transfer data
-      }
-
-      // Create a map of submission data by submission_id for quick lookup
-      const submissionMap = new Map();
-      const submissionData = submissionDataRaw ?? [];
-      setData(submissionData);
-
-      if (submissionData) {
-        submissionData.forEach((sub: any) => {
-          submissionMap.set(sub.submission_id, sub);
-        });
-      }
-
-      // Merge transfer data with submission data
-      const mergedData = ((transferData ?? []) as unknown as SubmissionPortalRow[])?.map(transfer => {
-        const submission = submissionMap.get(transfer.submission_id);
-        
-        if (submission) {
-          // Merge submission data with transfer data
-          // IMPORTANT: daily_deal_flow is the authoritative source for status/notes,
-          // so we explicitly re-apply transfer.status and transfer.notes after the spread.
-          return {
-            ...transfer,
-            ...submission,
-            // daily_deal_flow status & notes always win
-            status: transfer.status,
-            notes: transfer.notes,
-            // Keep transfer data for fields that might be missing in submission
-            insured_name: submission.insured_name || transfer.insured_name,
-            client_phone_number: submission.client_phone_number || transfer.client_phone_number,
-            lead_vendor: submission.lead_vendor || transfer.lead_vendor,
-            buffer_agent: submission.buffer_agent || transfer.buffer_agent,
-            agent: submission.agent || transfer.agent,
-            licensed_agent_account: submission.licensed_agent_account || transfer.licensed_agent_account,
-            carrier: submission.carrier || transfer.carrier,
-            product_type: submission.product_type || transfer.product_type,
-            monthly_premium: submission.monthly_premium || transfer.monthly_premium,
-            face_amount: submission.face_amount || transfer.face_amount,
-            // Mark as having submission data
-            has_submission_data: true
-          };
-        } else {
-          // No submission data - show transfer data with missing label
-          const isCallback = Boolean((transfer as any).from_callback) || Boolean((transfer as any).is_callback);
-          return {
-            ...transfer,
-            // Mark as missing submission data
-            has_submission_data: false,
-            verification_logs: "Update log missing - No submission data found",
-            source_type: isCallback ? 'callback' : 'zapier',
-          };
-        }
-      }) || [];
-
-      const mergedWithSourceType = mergedData.map((row) => {
-        const isCallback = Boolean((row as any).from_callback) || Boolean((row as any).is_callback);
-        return {
-          ...row,
-          source_type: row.source_type ?? (isCallback ? 'callback' : 'zapier'),
-        };
-      });
-
-      // Fetch call logs for ALL entries (not just those with submission data)
-      const allSubmissionIds = mergedWithSourceType.map(row => row.submission_id);
-      
-      let callLogsData: Record<string, CallLog[]> = {};
-      
-      if (allSubmissionIds.length > 0) {
-        const { data: logsData, error: logsError } = await supabase
-          .from('call_update_logs')
-          .select('submission_id, agent_type, agent_name, event_type, created_at')
-          .in('submission_id', allSubmissionIds)
-          .order('created_at', { ascending: true });
-
-        if (logsError) {
-          console.warn("Error fetching call logs:", logsError);
-        } else {
-          // Group logs by submission_id
-          callLogsData = (logsData || []).reduce((acc, log) => {
-            if (!acc[log.submission_id]) {
-              acc[log.submission_id] = [];
-            }
-            acc[log.submission_id].push(log);
-            return acc;
-          }, {} as Record<string, CallLog[]>);
-        }
-      }
-
-      // Add verification logs to each row
-      const dataWithLogs = mergedWithSourceType.map(row => {
-        const logs = callLogsData[row.submission_id] || [];
-        
-        if (logs.length > 0) {
-          // Generate verification logs for entries that have call logs
-          return {
-            ...row,
-            verification_logs: generateVerificationLogSummary(logs, row)
-          };
-        } else if (row.has_submission_data) {
-          // Fallback for entries with submission data but no call logs
-          return {
-            ...row,
-            verification_logs: generateVerificationLogSummary([], row)
-          };
-        } else {
-          // No call logs and no submission data
-          return {
-            ...row,
-            verification_logs: "No call activity recorded"
-          };
-        }
-      });
-
-      setData(dataWithLogs);
-
-      // Recompute note counts using the fully merged dataset so transfer-only rows are included
-      fetchNoteCounts(dataWithLogs);
+      setData(mapped);
+      fetchNoteCounts(mapped);
 
       if (showRefreshToast) {
         toast({
@@ -577,20 +585,24 @@ const SubmissionPortalPage = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [dbSubmissionStages, toast]);
+
+  useEffect(() => {
+    void fetchMarketingTeam();
+  }, [fetchMarketingTeam]);
 
   // Update filtered data whenever data or filters change
   useEffect(() => {
     setFilteredData(applyFilters(data));
-  }, [data, dateFilter, statusFilter, leadVendorFilter, showDuplicates, searchTerm, dataCompletenessFilter]);
+  }, [applyFilters, data]);
 
   useEffect(() => {
     if (stagesLoading) return;
-    fetchData();
-  }, [dateFilter, stagesLoading]);
+    void fetchData();
+  }, [fetchData, stagesLoading]);
 
   const handleRefresh = () => {
-    fetchData(true);
+    void fetchData(true);
   };
 
   const fetchNoteCounts = async (rows: SubmissionPortalRow[] | null | undefined) => {
@@ -601,121 +613,73 @@ const SubmissionPortalPage = () => {
       return;
     }
 
-    const submissionMap = new Map<string, string>();
-    safeRows.forEach((r) => {
-      if (r.submission_id) submissionMap.set(r.submission_id, r.id);
-    });
-
     const counts: Record<string, number> = {};
     leadIds.forEach((id) => {
       counts[id] = 0;
     });
 
-    // lead_notes (deduped)
-    const submissionIds = Array.from(submissionMap.keys());
+    // lawyer_lead_notes
     try {
-      let query = (supabase as any)
-        .from('lead_notes')
-        .select('id, lead_id, submission_id');
+      const client = supabase as unknown as {
+        from: (table: string) => {
+          select: (cols: string) => {
+            in: (col: string, values: string[]) => Promise<{ data: unknown; error: { message?: string } | null }>;
+          };
+        };
+      };
 
-      if (leadIds.length > 0) {
-        query = query.in('lead_id', leadIds);
-      }
-      if (submissionIds.length > 0) {
-        query = query.in('submission_id', submissionIds);
-      }
-
-      const { data: noteRows, error: notesErr } = await query;
+      const { data: noteRows, error: notesErr } = await client
+        .from('lawyer_lead_notes')
+        .select('lead_id')
+        .in('lead_id', leadIds);
 
       if (!notesErr && Array.isArray(noteRows)) {
-        const seen = new Set<string>();
-        noteRows.forEach((row: { id: string; lead_id?: string | null; submission_id?: string | null }) => {
-          if (!row?.id || seen.has(row.id)) return;
-          seen.add(row.id);
-
-          const directLeadId = (row.lead_id || '').toString();
-          if (directLeadId && counts[directLeadId] !== undefined) {
-            counts[directLeadId] = (counts[directLeadId] || 0) + 1;
-            return;
-          }
-
-          const subId = (row.submission_id || '').toString();
-          if (subId) {
-            const leadId = submissionMap.get(subId);
-            if (leadId) {
-              counts[leadId] = (counts[leadId] || 0) + 1;
-            }
-          }
+        (noteRows as Array<{ lead_id: string }>).forEach((row) => {
+          if (!row?.lead_id) return;
+          if (counts[row.lead_id] === undefined) return;
+          counts[row.lead_id] = (counts[row.lead_id] || 0) + 1;
         });
       }
     } catch (e) {
       console.warn('Failed to fetch lead note counts', e);
     }
 
-    // Legacy daily_deal_flow notes
+    // Legacy notes on lawyer_leads.additional_notes (mapped to row.notes)
     safeRows.forEach((r) => {
       if ((r.notes || '').trim()) {
         counts[r.id] = (counts[r.id] || 0) + 1;
       }
     });
 
-    // Legacy leads.additional_notes via submission_id
-    if (submissionIds.length > 0) {
-      try {
-        const { data: leadRows, error: leadsErr } = await supabase
-          .from('leads')
-          .select('submission_id, additional_notes')
-          .in('submission_id', submissionIds);
-
-        if (!leadsErr && Array.isArray(leadRows)) {
-          leadRows.forEach((row) => {
-            const noteText = (row.additional_notes as string | null)?.trim();
-            if (noteText) {
-              const leadId = submissionMap.get(row.submission_id as string);
-              if (leadId) {
-                counts[leadId] = (counts[leadId] || 0) + 1;
-              }
-            }
-          });
-        }
-      } catch (e) {
-        console.warn('Failed to fetch legacy leads notes', e);
-      }
-    }
-
     setNoteCounts(counts);
   };
 
   const handleDropToStage = async (rowId: string, stageKey: string) => {
-    const nextStatus = getStatusForStage(stageKey);
-
     const prev = data;
-    const next = prev.map((r) => (r.id === rowId ? { ...r, status: nextStatus } : r));
+    const next = prev.map((r) => (r.id === rowId ? { ...r, stage_id: stageKey } : r));
     setData(next);
 
     try {
-      const { error: transferError } = await supabase
-        .from('daily_deal_flow')
-        .update({ status: nextStatus })
+      const sb = supabase as unknown as {
+        from: (table: string) => {
+          update: (data: unknown) => {
+            eq: (column: string, value: string) => Promise<{ error: { message?: string } | null }>;
+          };
+        };
+      };
+
+      const { error } = await sb
+        .from('lawyer_leads')
+        .update({ stage_id: stageKey })
         .eq('id', rowId);
 
-      if (transferError) throw transferError;
+      if (error) throw error;
 
-      const droppedRow = prev.find((r) => r.id === rowId);
-      if (droppedRow?.submission_id) {
-        try {
-          await (supabase as any)
-            .from('submission_portal')
-            .update({ status: nextStatus })
-            .eq('submission_id', droppedRow.submission_id);
-        } catch {
-          // submission_portal row may not exist — ignore
-        }
-      }
+      const stageLabel = dbSubmissionStages.find((s) => s.key === stageKey)?.label || stageKey;
 
       toast({
         title: 'Status Updated',
-        description: `Lead status updated to "${nextStatus}"`,
+        description: `Lead updated to "${stageLabel}"`,
       });
     } catch (e) {
       console.error('Error updating status:', e);
@@ -736,7 +700,7 @@ const SubmissionPortalPage = () => {
       grouped.get(stageKey)?.push(row);
     });
     return grouped;
-  }, [filteredData, kanbanStages]);
+  }, [filteredData, kanbanStages, deriveStageKey]);
 
   useEffect(() => {
     setColumnPage((prev) => {
@@ -750,7 +714,7 @@ const SubmissionPortalPage = () => {
       });
       return next;
     });
-  }, [leadsByStage]);
+  }, [kanbanStages, leadsByStage]);
 
   const getStageDisplayLabel = (label: string) => label.replace(/^Stage\s+\d+\s*:\s*/i, "");
 
@@ -791,7 +755,11 @@ const SubmissionPortalPage = () => {
 
   const handleOpenEdit = (row: SubmissionPortalRow) => {
     setEditRow(row);
-    const { parent, reason } = parseStageLabel((row.status || '').trim());
+    const currentLabel =
+      dbSubmissionStages.find((s) => s.key === (row.stage_id || ''))?.label ||
+      dbSubmissionStages.find((s) => s.id === (row.stage_id || ''))?.label ||
+      '';
+    const { parent, reason } = parseStageLabel(currentLabel.trim());
     setEditStage(parent);
     setEditReason(reason || '');
     setEditNotes('');
@@ -811,76 +779,72 @@ const SubmissionPortalPage = () => {
       ? buildStatusLabel(parentLabel, selectedReason)
       : parentLabel;
 
-    const previousStage = (editRow.status || '').trim();
-    const stageChanged = previousStage !== nextStage;
+    const nextStageRow = dbSubmissionStages.find((s) => s.label === nextStage);
+    if (!nextStageRow) return;
+
+    const previousStage = (editRow.stage_id || '').trim();
+    const stageChanged = previousStage !== nextStageRow.key;
 
     try {
       setEditSaving(true);
 
-      const { error: flowError } = await supabase
-        .from('daily_deal_flow')
-        .update({ status: nextStage, notes: editNotes })
+      const sb = supabase as unknown as {
+        from: (table: string) => {
+          update: (data: unknown) => {
+            eq: (column: string, value: string) => Promise<{ error: { message?: string } | null }>;
+          };
+          insert: (rows: unknown) => Promise<{ error: { message?: string } | null }>;
+          select: (cols: string) => {
+            eq: (column: string, value: string) => {
+              maybeSingle: () => Promise<{ data: unknown; error: { message?: string } | null }>;
+            };
+          };
+        };
+        auth: {
+          getUser: () => Promise<{ data: { user: { id: string; email?: string | null } | null } | null; error: { message?: string } | null }>;
+        };
+      };
+
+      const { error } = await sb
+        .from('lawyer_leads')
+        .update({ stage_id: nextStageRow.key, additional_notes: editNotes })
         .eq('id', editRow.id);
 
-      if (flowError) throw flowError;
-
-      // Also update submission_portal if the record exists there
-      if (editRow.submission_id) {
-        try {
-          await (supabase as any)
-            .from('submission_portal')
-            .update({ status: nextStage })
-            .eq('submission_id', editRow.submission_id);
-        } catch {
-          // submission_portal row may not exist — ignore
-        }
-      }
+      if (error) throw error;
 
       const notesText = (editNotes || '').trim() || 'No notes provided.';
 
       const trimmedNote = (editNotes || '').trim();
       if (trimmedNote.length > 0) {
         try {
-          const { data: userData, error: userErr } = await supabase.auth.getUser();
-          if (!userErr) {
-            const user = userData?.user;
-            const createdBy = user?.id || null;
-            const emailPrefix = user?.email ? user.email.split('@')[0] : null;
+          const { data: userData, error: userErr } = await sb.auth.getUser();
+          const authUser = userData?.user;
+          if (userErr || !authUser?.id) {
+            console.warn('Failed to fetch auth user for note insert', userErr);
+          } else {
+            const { data: appUserRow, error: appUserErr } = await sb
+              .from('app_users')
+              .select('display_name,email')
+              .eq('user_id', authUser.id)
+              .maybeSingle();
 
-            let displayName: string | null = null;
-            if (user?.id) {
-              try {
-                const { data: profileData } = await (supabase as any)
-                  .from('profiles')
-                  .select('display_name')
-                  .eq('user_id', user.id)
-                  .limit(1);
-
-                const raw = Array.isArray(profileData) ? profileData?.[0]?.display_name : profileData?.display_name;
-                displayName = typeof raw === 'string' ? raw.trim() : null;
-                if (displayName && displayName.length === 0) displayName = null;
-              } catch (e) {
-                console.warn('Failed to fetch profile display_name', e);
-              }
+            if (appUserErr) {
+              console.warn('Failed to resolve created_by_name', appUserErr);
             }
 
-            const authorName =
-              displayName || (user?.user_metadata as any)?.full_name || emailPrefix || user?.id || null;
+            const typed = appUserRow as { display_name?: string | null; email?: string | null } | null;
+            const createdByName = (typed?.display_name || '').trim() || typed?.email || authUser.email || null;
 
-            const { error: insertErr } = await (supabase as any).from('lead_notes').insert({
+            const { error: insertErr } = await sb.from('lawyer_lead_notes').insert({
               lead_id: editRow.id,
-              submission_id: editRow.submission_id ?? null,
               note: trimmedNote,
-              source: 'Lawyer Portal',
-              created_by: createdBy,
-              author_name: authorName,
+              created_by: authUser.id,
+              created_by_name: createdByName,
             });
 
             if (insertErr) {
-              console.warn('Failed to insert lead note', insertErr);
+              console.warn('Failed to insert lawyer_lead_notes row', insertErr);
             }
-          } else {
-            console.warn('Failed to fetch auth user for note insert', userErr);
           }
         } catch (e) {
           console.warn('Unexpected error inserting lead note', e);
@@ -909,8 +873,8 @@ const SubmissionPortalPage = () => {
         }
       }
 
-      setData((prev) => prev.map((r) => (r.id === editRow.id ? { ...r, status: nextStage, notes: editNotes } : r)));
-      setFilteredData((prev) => prev.map((r) => (r.id === editRow.id ? { ...r, status: nextStage, notes: editNotes } : r)));
+      setData((prev) => prev.map((r) => (r.id === editRow.id ? { ...r, stage_id: nextStageRow.key, notes: editNotes } : r)));
+      setFilteredData((prev) => prev.map((r) => (r.id === editRow.id ? { ...r, stage_id: nextStageRow.key, notes: editNotes } : r)));
 
       toast({
         title: 'Transfer Updated',
@@ -969,6 +933,26 @@ const SubmissionPortalPage = () => {
                     {dbSubmissionStages.map((s) => (
                       <SelectItem key={s.key} value={s.label}>
                         {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={assigneeFilter}
+                onValueChange={(v) => setAssigneeFilter(v)}
+              >
+                <SelectTrigger className="w-56">
+                  <SelectValue placeholder="Assignee" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="all">All</SelectItem>
+                    {user?.id ? <SelectItem value={user.id}>My Leads</SelectItem> : null}
+                    {marketingTeam.map((m) => (
+                      <SelectItem key={m.user_id} value={m.user_id}>
+                        {m.display_name}
                       </SelectItem>
                     ))}
                   </SelectGroup>

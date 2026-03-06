@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,14 +22,28 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeftRight, Loader2, Pencil, RefreshCw, Users, StickyNote, Plus } from "lucide-react";
 import { usePipelineStages, type PipelineStage } from "@/hooks/usePipelineStages";
+
+type UntypedSb = {
+  from: (table: string) => {
+    select: (cols: string) => {
+      eq: (col: string, value: string) => {
+        limit: (n: number) => Promise<{ data: unknown; error: unknown }>;
+      };
+      in: (col: string, values: string[]) => Promise<{ data: unknown[] | null; error: unknown }>;
+    };
+    insert: (data: unknown) => Promise<{ error: unknown }>;
+  };
+};
 
 export interface TransferPortalRow {
   id: string;
   submission_id: string;
   user_id?: string;
+  assigned_user_id?: string | null;
   pipeline_name?: string;
   stage_id?: string;
   submission_date?: string;
@@ -49,8 +63,15 @@ export interface TransferPortalRow {
   updated_at?: string;
 }
 
+type MarketingTeamMember = {
+  user_id: string;
+  display_name: string;
+  email: string;
+};
+
 const TransferPortalPage = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   // --- Dynamic pipeline stages from DB ---
   const { stages: dbTransferStages, loading: transferStagesLoading } = usePipelineStages("cold_call_pipeline");
@@ -71,12 +92,17 @@ const TransferPortalPage = () => {
     return Array.from(new Set(kanbanStages.map((s) => s.label).map((label) => label.trim()).filter(Boolean)));
   }, [kanbanStages]);
 
-  const deriveStageKey = (row: TransferPortalRow): string => {
-    const stageId = (row.stage_id || '').trim();
-    if (!stageId) return kanbanStages[0]?.key ?? 'transfer_api';
-    const exact = dbTransferStages.find((s) => s.id === stageId);
-    return exact?.key ?? kanbanStages[0]?.key ?? 'transfer_api';
-  };
+  const deriveStageKey = useCallback(
+    (row: TransferPortalRow): string => {
+      const stageId = (row.stage_id || '').trim();
+      if (!stageId) return kanbanStages[0]?.key ?? 'transfer_api';
+      const asKey = dbTransferStages.find((s) => s.key === stageId);
+      if (asKey?.key) return asKey.key;
+      const legacy = dbTransferStages.find((s) => s.id === stageId);
+      return legacy?.key ?? kanbanStages[0]?.key ?? 'transfer_api';
+    },
+    [dbTransferStages, kanbanStages]
+  );
 
   const handleKanbanDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     if (!draggingId) return;
@@ -118,6 +144,11 @@ const TransferPortalPage = () => {
   const [columnPage, setColumnPage] = useState<Record<string, number>>({});
   const [noteCounts, setNoteCounts] = useState<Record<string, number>>({});
 
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
+  const [marketingTeam, setMarketingTeam] = useState<MarketingTeamMember[]>([]);
+  const [didInitAssigneeFilter, setDidInitAssigneeFilter] = useState(false);
+
   const [editOpen, setEditOpen] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [editRow, setEditRow] = useState<TransferPortalRow | null>(null);
@@ -126,7 +157,7 @@ const TransferPortalPage = () => {
   const [editStageOpen, setEditStageOpen] = useState(false);
 
   // Remove duplicates based on lawyer_full_name and phone_number
-  const removeDuplicates = (records: TransferPortalRow[]): TransferPortalRow[] => {
+  const removeDuplicates = useCallback((records: TransferPortalRow[]): TransferPortalRow[] => {
     const seen = new Map<string, TransferPortalRow>();
     
     records.forEach(record => {
@@ -139,11 +170,15 @@ const TransferPortalPage = () => {
     });
     
     return Array.from(seen.values());
-  };
+  }, []);
 
   // Apply filters and duplicate removal
-  const applyFilters = (records: TransferPortalRow[]): TransferPortalRow[] => {
+  const applyFilters = useCallback((records: TransferPortalRow[]): TransferPortalRow[] => {
     let filtered = records;
+
+    if (assigneeFilter !== 'all') {
+      filtered = filtered.filter((record) => (record.assigned_user_id || '') === assigneeFilter);
+    }
 
     // Apply search filter
     if (searchTerm) {
@@ -163,95 +198,192 @@ const TransferPortalPage = () => {
     }
 
     return filtered;
-  };
+  }, [assigneeFilter, removeDuplicates, searchTerm, showDuplicates]);
 
 
   const { toast } = useToast();
 
-  // Fetch data from Supabase
-  const fetchData = async (showRefreshToast = false) => {
+  const fetchMarketingTeam = useCallback(async () => {
     try {
-      setRefreshing(true);
-
-      const lawyerLeadsQuery = supabase as unknown as {
+      const sb = supabase as unknown as {
         from: (table: string) => {
-          select: (columns: string) => {
-            eq: (column: string, value: string) => {
-              order: (column: string, options: { ascending: boolean }) => Promise<{ data: any[] | null; error: any }>;
-            };
+          select: (cols: string) => {
+            order: (col: string, opts: { ascending: boolean }) => Promise<{ data: unknown; error: { message?: string } | null }>;
+            in: (col: string, values: string[]) => Promise<{ data: unknown; error: { message?: string } | null }>;
           };
         };
       };
 
-      const lawyerLeadsCountQuery = supabase as unknown as {
-        from: (table: string) => {
-          select: (columns: string, options: { count: string; head: boolean }) => {
-            eq: (column: string, value: string) => Promise<{ count: number | null; error: any }>;
-          };
-        };
-      };
+      const teamRes = await sb.from('marketing_team').select('user_id,created_at').order('created_at', { ascending: false });
+      if (teamRes.error) throw teamRes.error;
 
-      const [transfersRes, transfersCountRes] = await Promise.all([
-        lawyerLeadsQuery
-          .from('lawyer_leads')
-          .select('*')
-          .eq('pipeline_name', 'cold_call_pipeline')
-          .order('created_at', { ascending: false }),
-        lawyerLeadsCountQuery
-          .from('lawyer_leads')
-          .select('*', { count: 'exact', head: true })
-          .eq('pipeline_name', 'cold_call_pipeline'),
-      ]);
-
-      if (transfersRes.error) {
-        console.error("Error fetching transfer portal data:", transfersRes.error);
-        toast({
-          title: "Error",
-          description: "Failed to fetch transfer portal data",
-          variant: "destructive",
-        });
+      const teamRows = (teamRes.data ?? []) as Array<{ user_id: string }>;
+      const ids = teamRows.map((r) => r.user_id).filter(Boolean);
+      if (ids.length === 0) {
+        setMarketingTeam([]);
         return;
       }
 
-      setAllTimeTransfers(transfersCountRes.count ?? 0);
+      const usersRes = await sb.from('app_users').select('user_id,email,display_name').in('user_id', ids);
+      if (usersRes.error) throw usersRes.error;
 
-      const transferRows = ((transfersRes.data ?? []) as unknown as TransferPortalRow[]);
+      const users = (usersRes.data ?? []) as Array<{ user_id: string; email: string; display_name: string | null }>;
+      const userById = new Map(users.map((u) => [u.user_id, u] as const));
 
-      setData(transferRows);
+      const members = ids
+        .map((id) => {
+          const u = userById.get(id);
+          if (!u) return null;
+          return {
+            user_id: id,
+            email: u.email,
+            display_name: (u.display_name || '').trim() || u.email,
+          } satisfies MarketingTeamMember;
+        })
+        .filter(Boolean) as MarketingTeamMember[];
 
-      // Fetch aggregated note counts
-      fetchNoteCounts(transferRows);
-
-      if (showRefreshToast) {
-        toast({
-          title: "Success",
-          description: "Data refreshed successfully",
-        });
-      }
-    } catch (error) {
-      console.error("Error:", error);
-      toast({
-        title: "Error",
-        description: "An unexpected error occurred",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+      members.sort((a, b) => a.display_name.localeCompare(b.display_name));
+      setMarketingTeam(members);
+    } catch (e) {
+      console.warn('Failed to fetch marketing team', e);
+      setMarketingTeam([]);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const checkAdmin = async () => {
+      if (!user?.id) return;
+      try {
+        const appUsersQuery = supabase as unknown as {
+          from: (table: string) => {
+            select: (columns: string) => {
+              eq: (column: string, value: string) => {
+                maybeSingle: () => Promise<{ data: unknown; error: { message: string } | null }>;
+              };
+            };
+          };
+        };
+
+        const { data, error } = await appUsersQuery
+          .from('app_users')
+          .select('role')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        const typed = data as { role?: string } | null;
+        if (!error && typed?.role && ['admin', 'super_admin'].includes(typed.role)) {
+          setIsAdmin(true);
+        } else {
+          setIsAdmin(false);
+        }
+      } catch (e) {
+        console.warn('Failed to check admin role', e);
+        setIsAdmin(false);
+      }
+    };
+
+    void checkAdmin();
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    if (didInitAssigneeFilter) return;
+    if (!isAdmin) {
+      setAssigneeFilter(user.id);
+    }
+    setDidInitAssigneeFilter(true);
+  }, [didInitAssigneeFilter, isAdmin, user?.id]);
+
+  // Fetch data from Supabase
+  const fetchData = useCallback(
+    async (showRefreshToast = false) => {
+      try {
+        setRefreshing(true);
+
+        type QueryRes = { data: unknown[] | null; error: { message?: string } | null };
+        type CountRes = { count: number | null; error: { message?: string } | null };
+
+        const lawyerLeadsQuery = supabase as unknown as {
+          from: (table: string) => {
+            select: (columns: string) => {
+              eq: (column: string, value: string) => {
+                order: (column: string, options: { ascending: boolean }) => Promise<QueryRes>;
+              };
+            };
+          };
+        };
+
+        const lawyerLeadsCountQuery = supabase as unknown as {
+          from: (table: string) => {
+            select: (columns: string, options: { count: string; head: boolean }) => {
+              eq: (column: string, value: string) => Promise<CountRes>;
+            };
+          };
+        };
+
+        const [transfersRes, transfersCountRes] = await Promise.all([
+          lawyerLeadsQuery
+            .from('lawyer_leads')
+            .select('*')
+            .eq('pipeline_name', 'cold_call_pipeline')
+            .order('created_at', { ascending: false }),
+          lawyerLeadsCountQuery
+            .from('lawyer_leads')
+            .select('*', { count: 'exact', head: true })
+            .eq('pipeline_name', 'cold_call_pipeline'),
+        ]);
+
+        if (transfersRes.error) {
+          console.error("Error fetching transfer portal data:", transfersRes.error);
+          toast({
+            title: "Error",
+            description: "Failed to fetch transfer portal data",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        setAllTimeTransfers(transfersCountRes.count ?? 0);
+
+        const transferRows = ((transfersRes.data ?? []) as unknown as TransferPortalRow[]);
+
+        setData(transferRows);
+
+        // Fetch aggregated note counts
+        fetchNoteCounts(transferRows);
+
+        if (showRefreshToast) {
+          toast({
+            title: "Success",
+            description: "Data refreshed successfully",
+          });
+        }
+      } catch (error) {
+        console.error("Error:", error);
+        toast({
+          title: "Error",
+          description: "An unexpected error occurred",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [toast]
+  );
 
   // Update filtered data whenever data or filters change
   useEffect(() => {
     setFilteredData(applyFilters(data));
     setCurrentPage(1); // Reset to first page when filters change
-  }, [data, showDuplicates, searchTerm]);
+  }, [applyFilters, data]);
 
   // Pagination calculations
   const stageFilteredData = useMemo(() => {
     if (selectedStage === "all") return filteredData;
     return filteredData.filter((row) => deriveStageKey(row) === selectedStage);
-  }, [filteredData, selectedStage]);
+  }, [filteredData, selectedStage, deriveStageKey]);
 
   const totalPages = Math.max(1, Math.ceil(stageFilteredData.length / itemsPerPage));
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -261,7 +393,7 @@ const TransferPortalPage = () => {
 
   const handleOpenEdit = (row: TransferPortalRow) => {
     setEditRow(row);
-    const currentStage = dbTransferStages.find(s => s.id === row.stage_id);
+    const currentStage = dbTransferStages.find((s) => s.key === row.stage_id) ?? dbTransferStages.find((s) => s.id === row.stage_id);
     setEditStage(currentStage?.label || kanbanStages[0].label);
     setEditNotes('');
     setEditStageOpen(false);
@@ -291,7 +423,7 @@ const TransferPortalPage = () => {
     if (!nextStage) return;
 
     const previousStageId = editRow.stage_id || '';
-    const stageChanged = previousStageId !== nextStage.id;
+    const stageChanged = previousStageId !== nextStage.key;
 
     try {
       setEditSaving(true);
@@ -299,14 +431,14 @@ const TransferPortalPage = () => {
       const lawyerLeadsUpdate = supabase as unknown as {
         from: (table: string) => {
           update: (data: { stage_id: string; additional_notes: string }) => {
-            eq: (column: string, value: string) => Promise<{ error: any }>;
+            eq: (column: string, value: string) => Promise<{ error: unknown }>;
           };
         };
       };
 
       const { error } = await lawyerLeadsUpdate
         .from('lawyer_leads')
-        .update({ stage_id: nextStage.id, additional_notes: editNotes })
+        .update({ stage_id: nextStage.key, additional_notes: editNotes })
         .eq('id', editRow.id);
 
       if (error) {
@@ -320,53 +452,45 @@ const TransferPortalPage = () => {
 
       const notesText = (editNotes || '').trim() || 'No notes provided.';
 
-      // Append note to lead_notes when provided
+      // Append note to lawyer_lead_notes when provided
       const trimmedNote = (editNotes || '').trim();
-      if (trimmedNote.length > 0) {
+      if (trimmedNote.length > 0 && user?.id) {
         try {
-          const { data: userData, error: userErr } = await supabase.auth.getUser();
-          if (!userErr) {
-            const user = userData?.user;
-            const createdBy = user?.id || null; // created_by is uuid
-            const emailPrefix = user?.email ? user.email.split('@')[0] : null;
+          const nameClient = supabase as unknown as {
+            from: (table: string) => {
+              select: (cols: string) => {
+                eq: (col: string, value: string) => {
+                  maybeSingle: () => Promise<{ data: unknown; error: { message: string } | null }>;
+                };
+              };
+            };
+          };
 
-            let displayName: string | null = null;
-            if (user?.id) {
-              try {
-                const { data: profileData } = await (supabase as any)
-                  .from('profiles')
-                  .select('display_name')
-                  .eq('user_id', user.id)
-                  .limit(1);
+          const { data: userRow, error: userErr } = await nameClient
+            .from('app_users')
+            .select('display_name,email')
+            .eq('user_id', user.id)
+            .maybeSingle();
 
-                const raw = Array.isArray(profileData) ? profileData?.[0]?.display_name : profileData?.display_name;
-                displayName = typeof raw === 'string' ? raw.trim() : null;
-                if (displayName && displayName.length === 0) displayName = null;
-              } catch (e) {
-                console.warn('Failed to fetch profile display_name', e);
-              }
-            }
+          const typed = userRow as { display_name?: string | null; email?: string | null } | null;
+          const createdByName = (typed?.display_name || '').trim() || typed?.email || null;
 
-            const authorName =
-              displayName || (user?.user_metadata as any)?.full_name || emailPrefix || user?.id || null;
+          if (userErr) {
+            console.warn('Failed to resolve created_by_name', userErr);
+          }
 
-            const { error: insertErr } = await (supabase as any).from('lead_notes').insert({
-              lead_id: editRow.id,
-              submission_id: (editRow as any).submission_id ?? null,
-              note: trimmedNote,
-              source: 'Marketing Pipeline',
-              created_by: createdBy,
-              author_name: authorName,
-            });
+          const { error: insertErr } = await (supabase as unknown as UntypedSb).from('lawyer_lead_notes').insert({
+            lead_id: editRow.id,
+            note: trimmedNote,
+            created_by: user.id,
+            created_by_name: createdByName,
+          });
 
-            if (insertErr) {
-              console.warn('Failed to insert lead note', insertErr);
-            }
-          } else {
-            console.warn('Failed to fetch auth user for note insert', userErr);
+          if (insertErr) {
+            console.warn('Failed to insert lawyer_lead_notes row', insertErr);
           }
         } catch (e) {
-          console.warn('Unexpected error inserting lead note', e);
+          console.warn('Unexpected error inserting lawyer_lead_notes row', e);
         }
       }
 
@@ -380,7 +504,7 @@ const TransferPortalPage = () => {
               insuredName: editRow.lawyer_full_name ?? null,
               clientPhoneNumber: editRow.phone_number ?? null,
               previousDisposition: previousStageId ?? null,
-              newDisposition: nextStage.id,
+              newDisposition: nextStage.key,
               notes: notesText,
               noteOnly: !stageChanged,
             },
@@ -398,7 +522,7 @@ const TransferPortalPage = () => {
           row.id === editRow.id
             ? {
                 ...row,
-                stage_id: nextStage.id,
+                stage_id: nextStage.key,
                 additional_notes: editNotes,
               }
             : row
@@ -425,7 +549,7 @@ const TransferPortalPage = () => {
       grouped.get(stageKey)?.push(row);
     });
     return grouped;
-  }, [stageFilteredData, kanbanStages]);
+  }, [stageFilteredData, kanbanStages, deriveStageKey]);
 
   useEffect(() => {
     setColumnPage((prev) => {
@@ -438,7 +562,7 @@ const TransferPortalPage = () => {
       });
       return next;
     });
-  }, [leadsByStage]);
+  }, [kanbanStages, leadsByStage]);
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
@@ -458,7 +582,11 @@ const TransferPortalPage = () => {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
+
+  useEffect(() => {
+    void fetchMarketingTeam();
+  }, [fetchMarketingTeam]);
 
   const handleRefresh = () => {
     fetchData(true);
@@ -473,7 +601,7 @@ const TransferPortalPage = () => {
 
     const submissionMap = new Map<string, string>();
     rows.forEach((r) => {
-      const submissionId = (r as any).submission_id as string | undefined;
+      const submissionId = r.submission_id;
       if (submissionId) submissionMap.set(submissionId, r.id);
     });
 
@@ -482,15 +610,15 @@ const TransferPortalPage = () => {
       counts[id] = 0;
     });
 
-    // lead_notes counts
+    // lawyer_lead_notes counts
     try {
-      const { data: leadNoteRows, error: leadNoteErr } = await (supabase as any)
-        .from('lead_notes')
+      const { data: leadNoteRows, error: leadNoteErr } = await (supabase as unknown as UntypedSb)
+        .from('lawyer_lead_notes')
         .select('lead_id')
         .in('lead_id', ids);
 
       if (!leadNoteErr && Array.isArray(leadNoteRows)) {
-        leadNoteRows.forEach((row: { lead_id: string }) => {
+        (leadNoteRows as Array<{ lead_id: string }>).forEach((row) => {
           if (row.lead_id) {
             counts[row.lead_id] = (counts[row.lead_id] || 0) + 1;
           }
@@ -549,21 +677,21 @@ const TransferPortalPage = () => {
     if (!stage) return;
 
     const prev = data;
-    const next = prev.map((r) => (r.id === rowId ? { ...r, stage_id: stage.id } : r));
+    const next = prev.map((r) => (r.id === rowId ? { ...r, stage_id: stage.key } : r));
     setData(next);
 
     try {
       const lawyerLeadsUpdate = supabase as unknown as {
         from: (table: string) => {
           update: (data: { stage_id: string }) => {
-            eq: (column: string, value: string) => Promise<{ error: any }>;
+            eq: (column: string, value: string) => Promise<{ error: unknown }>;
           };
         };
       };
 
       const { error } = await lawyerLeadsUpdate
         .from('lawyer_leads')
-        .update({ stage_id: stage.id })
+        .update({ stage_id: stage.key })
         .eq('id', rowId);
 
       if (error) throw error;
@@ -608,7 +736,7 @@ const TransferPortalPage = () => {
     const csvContent = [
       headers.join(','),
       ...stageFilteredData.map(row => {
-        const currentStage = dbTransferStages.find(s => s.id === row.stage_id);
+        const currentStage = dbTransferStages.find((s) => s.key === row.stage_id) ?? dbTransferStages.find((s) => s.id === row.stage_id);
         return [
           row.submission_id,
           row.lawyer_full_name || '',
@@ -667,7 +795,7 @@ const TransferPortalPage = () => {
           </div>
 
           <div className="overflow-x-auto">
-            <div className="flex flex-nowrap items-center justify-between gap-3 min-w-[980px]">
+            <div className="flex flex-nowrap items-center justify-between gap-3 min-w-[1120px]">
               <Input
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -688,6 +816,29 @@ const TransferPortalPage = () => {
                     {kanbanStages.map((stage) => (
                       <SelectItem key={stage.key} value={stage.key}>
                         {stage.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={assigneeFilter}
+                onValueChange={(value) => {
+                  setAssigneeFilter(value);
+                  setCurrentPage(1);
+                }}
+              >
+                <SelectTrigger className="w-44">
+                  <SelectValue placeholder="Assignee" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="all">All</SelectItem>
+                    {user?.id ? <SelectItem value={user.id}>My Leads</SelectItem> : null}
+                    {marketingTeam.map((m) => (
+                      <SelectItem key={m.user_id} value={m.user_id}>
+                        {m.display_name}
                       </SelectItem>
                     ))}
                   </SelectGroup>
