@@ -225,17 +225,6 @@ const AppShell = ({
         show: isSuperAdmin,
       },
       {
-        label: 'Account Management',
-        icon: <TbUserShield className="h-4 w-4 text-current" />,
-        groupKey: 'account_management',
-        children: [
-          {
-            label: 'Order Management',
-            to: '/account-management/orders',
-          },
-        ],
-      },
-      {
         label: 'Lawyers',
         to: '/leads',
         icon: <Users className="h-4 w-4 text-current" />,
@@ -255,6 +244,17 @@ const AppShell = ({
         label: 'Daily Outreach Report',
         to: '/daily-deal-flow',
         icon: <Grid3X3 className="h-4 w-4 text-current" />,
+      },
+      {
+        label: 'Account Management',
+        icon: <TbUserShield className="h-4 w-4 text-current" />,
+        groupKey: 'account_management',
+        children: [
+          {
+            label: 'Order Management',
+            to: '/account-management/orders',
+          },
+        ],
       },
     ];
 

@@ -32,13 +32,6 @@ type OrderRow = {
   created_at: string;
 };
 
-type AppUserRow = {
-  user_id: string;
-  display_name: string | null;
-  email: string | null;
-  role: string | null;
-};
-
 type AttorneyProfileRow = Record<string, unknown> & {
   user_id?: string | null;
 };
@@ -156,7 +149,6 @@ const AccountOrderDetailPage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [order, setOrder] = useState<OrderRow | null>(null);
-  const [lawyer, setLawyer] = useState<AppUserRow | null>(null);
   const [attorneyProfile, setAttorneyProfile] = useState<AttorneyProfileRow | null>(null);
 
   const refresh = useCallback(async () => {
@@ -187,26 +179,6 @@ const AccountOrderDetailPage = () => {
 
       setOrder(orderRow);
 
-      const usersClient = supabase as unknown as {
-        from: (table: string) => {
-          select: (cols: string) => {
-            eq: (column: string, value: string) => {
-              maybeSingle: () => Promise<{ data: AppUserRow | null; error: { message?: string } | null }>;
-            };
-          };
-        };
-      };
-
-      const { data: userRow, error: userError } = await usersClient
-        .from("app_users")
-        .select("user_id,display_name,email,role")
-        .eq("user_id", orderRow.lawyer_id)
-        .maybeSingle();
-
-      if (userError) throw new Error(userError.message || "Failed to load lawyer info");
-
-      setLawyer(userRow);
-
       const profilesClient = supabase as unknown as {
         from: (table: string) => {
           select: (cols: string) => {
@@ -228,7 +200,6 @@ const AccountOrderDetailPage = () => {
       setAttorneyProfile(profileRow);
     } catch (err) {
       setOrder(null);
-      setLawyer(null);
       setAttorneyProfile(null);
       setError(err instanceof Error ? err.message : "Something went wrong while loading the order.");
     } finally {
@@ -255,12 +226,8 @@ const AccountOrderDetailPage = () => {
     "mobile",
     "cell",
   ]);
-  const attorneyEmail = lawyer?.email || pickFirstString(attorneyProfile, ["primary_email", "email"]);
-  const lawyerDisplayName =
-    ((lawyer?.display_name || "").trim() || attorneyProfileName || attorneyEmail || "Unknown lawyer");
-  const showAttorneyName = Boolean(
-    attorneyProfileName && attorneyProfileName.toLowerCase() !== lawyerDisplayName.toLowerCase()
-  );
+  const attorneyEmail = pickFirstString(attorneyProfile, ["primary_email", "email"]);
+  const lawyerDisplayName = attorneyProfileName || attorneyEmail || "Unknown lawyer";
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-6">
@@ -415,12 +382,7 @@ const AccountOrderDetailPage = () => {
                     <UserRound className="h-5 w-5" />
                   </div>
                   <div className="space-y-2">
-                    <div className="space-y-1">
-                      <div className="text-base font-medium">{lawyerDisplayName}</div>
-                      {showAttorneyName ? (
-                        <div className="text-sm text-muted-foreground">{attorneyProfileName}</div>
-                      ) : null}
-                    </div>
+                    <div className="text-base font-medium">{lawyerDisplayName}</div>
                     <div className="space-y-1 text-sm text-muted-foreground">
                       <div>{attorneyEmail || "No email available"}</div>
                       <div className="flex items-center gap-2">
@@ -428,7 +390,6 @@ const AccountOrderDetailPage = () => {
                         <span>{attorneyPhone || "No phone available"}</span>
                       </div>
                     </div>
-                    {lawyer?.role ? <Badge variant="outline">{startCase(lawyer.role)}</Badge> : null}
                   </div>
                 </div>
 
