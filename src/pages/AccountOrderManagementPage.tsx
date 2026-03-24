@@ -40,17 +40,11 @@ type OrderRow = {
   created_at: string;
 };
 
-type AppUserRow = {
-  user_id: string;
-  display_name: string | null;
-  email: string | null;
-  role: string | null;
-};
-
 type AttorneyProfileRow = {
   user_id: string;
   full_name: string | null;
   primary_email: string | null;
+  direct_phone?: string | null;
 };
 
 type StatusFilter = "all" | OrderStatus;
@@ -167,7 +161,6 @@ const AccountOrderManagementPage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [orders, setOrders] = useState<OrderRow[]>([]);
-  const [lawyerById, setLawyerById] = useState<Record<string, AppUserRow>>({});
   const [attorneyById, setAttorneyById] = useState<Record<string, AttorneyProfileRow>>({});
 
   const [query, setQuery] = useState("");
@@ -204,36 +197,9 @@ const AccountOrderManagementPage = () => {
 
       const lawyerIds = Array.from(new Set(safeOrders.map((order) => order.lawyer_id).filter(Boolean)));
       if (lawyerIds.length === 0) {
-        setLawyerById({});
         setAttorneyById({});
         return;
       }
-
-      const usersClient = supabase as unknown as {
-        from: (table: string) => {
-          select: (cols: string) => {
-            in: (
-              column: string,
-              values: string[]
-            ) => Promise<{ data: AppUserRow[] | null; error: { message?: string } | null }>;
-          };
-        };
-      };
-
-      const { data: lawyerRows, error: usersError } = await usersClient
-        .from("app_users")
-        .select("user_id,display_name,email,role")
-        .in("user_id", lawyerIds);
-
-      if (usersError) {
-        throw new Error(usersError.message || "Failed to load lawyer accounts");
-      }
-
-      const nextLawyerById: Record<string, AppUserRow> = {};
-      for (const row of lawyerRows ?? []) {
-        nextLawyerById[row.user_id] = row;
-      }
-      setLawyerById(nextLawyerById);
 
       const attorneysClient = supabase as unknown as {
         from: (table: string) => {
@@ -248,7 +214,7 @@ const AccountOrderManagementPage = () => {
 
       const { data: attorneyRows, error: attorneysError } = await attorneysClient
         .from("attorney_profiles")
-        .select("user_id,full_name,primary_email")
+        .select("user_id,full_name,primary_email,direct_phone")
         .in("user_id", lawyerIds);
 
       if (attorneysError) {
@@ -262,7 +228,6 @@ const AccountOrderManagementPage = () => {
       setAttorneyById(nextAttorneyById);
     } catch (err) {
       setOrders([]);
-      setLawyerById({});
       setAttorneyById({});
       setError(err instanceof Error ? err.message : "Something went wrong while loading account orders.");
     } finally {
@@ -289,7 +254,6 @@ const AccountOrderManagementPage = () => {
 
       if (!normalizedQuery) return true;
 
-      const lawyer = lawyerById[order.lawyer_id];
       const attorney = attorneyById[order.lawyer_id];
       const criteriaText = summarizeCriteria(order.criteria).join(" ");
       const haystack = [
@@ -297,9 +261,6 @@ const AccountOrderManagementPage = () => {
         order.lawyer_id,
         attorney?.full_name || "",
         attorney?.primary_email || "",
-        lawyer?.display_name || "",
-        lawyer?.email || "",
-        lawyer?.role || "",
         order.case_type,
         getCaseTypeLabel(order.case_type),
         order.case_subtype || "",
@@ -312,7 +273,7 @@ const AccountOrderManagementPage = () => {
 
       return haystack.includes(normalizedQuery);
     });
-  }, [attorneyById, lawyerById, orders, query, selectedCaseType, selectedStatus]);
+  }, [attorneyById, orders, query, selectedCaseType, selectedStatus]);
 
   const stats = useMemo(() => {
     const openOrders = orders.filter((order) => order.status === "OPEN");
@@ -489,7 +450,6 @@ const AccountOrderManagementPage = () => {
               </TableHeader>
               <TableBody>
                 {filteredOrders.map((order) => {
-                  const lawyer = lawyerById[order.lawyer_id];
                   const attorney = attorneyById[order.lawyer_id];
                   const criteriaSummary = summarizeCriteria(order.criteria);
                   const progress = getProgressPercent(order);
@@ -498,8 +458,9 @@ const AccountOrderManagementPage = () => {
                   const total = Number(order.quota_total) || 0;
                   const remaining = getRemainingDemand(order);
                   const daysUntilExpiry = getDaysUntil(order.expires_at);
-                  const lawyerName = (attorney?.full_name || "").trim() || (lawyer?.display_name || "").trim() || "Unnamed lawyer";
-                  const lawyerEmail = lawyer?.email || attorney?.primary_email || "No email on file";
+                  const lawyerName = (attorney?.full_name || "").trim() || "Unnamed lawyer";
+                  const lawyerEmail = attorney?.primary_email || "No email on file";
+                  const lawyerPhone = attorney?.direct_phone || "No phone on file";
 
                   return (
                     <TableRow
@@ -511,11 +472,7 @@ const AccountOrderManagementPage = () => {
                         <div className="space-y-1">
                           <div className="font-medium">{lawyerName}</div>
                           <div className="text-sm text-muted-foreground">{lawyerEmail}</div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            {lawyer?.role ? (
-                              <Badge variant="outline">{startCase(lawyer.role)}</Badge>
-                            ) : null}
-                          </div>
+                          <div className="text-sm text-muted-foreground">{lawyerPhone}</div>
                         </div>
                       </TableCell>
 
