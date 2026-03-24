@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useMarketingTeamFilterAccess } from "@/hooks/useMarketingTeamFilterAccess";
 import { useToast } from "@/hooks/use-toast";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,12 +35,6 @@ type UntypedClient = {
   };
 };
 
-type MarketingTeamMemberRow = {
-  user_id: string;
-  display_name: string;
-  email: string;
-};
-
 type LeadRow = {
   id: string;
   submission_id: string;
@@ -53,6 +48,7 @@ type AssignmentFilter = "all" | "assigned" | "unassigned";
 
 const LeadAssignmentPage = () => {
   const { user } = useAuth();
+  const { marketingTeam: team } = useMarketingTeamFilterAccess(user?.id);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -65,7 +61,6 @@ const LeadAssignmentPage = () => {
   const [assignmentFilter, setAssignmentFilter] = useState<AssignmentFilter>("all");
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
 
-  const [team, setTeam] = useState<MarketingTeamMemberRow[]>([]);
   const [leads, setLeads] = useState<LeadRow[]>([]);
 
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
@@ -113,63 +108,13 @@ const LeadAssignmentPage = () => {
     try {
       const sb = supabase as unknown as UntypedClient;
 
-      const [teamRowsRes, leadsRes] = await Promise.all([
-        (supabase as unknown as {
-          from: (table: string) => {
-            select: (cols: string) => {
-              order: (col: string, opts: { ascending: boolean }) => Promise<{ data: unknown[] | null; error: { message: string } | null }>;
-            };
-          };
-        })
-          .from("marketing_team")
-          .select("user_id,created_at")
-          .order("created_at", { ascending: false }),
-        sb
-          .from("lawyer_leads")
-          .select("id,submission_id,lawyer_full_name,firm_name,created_at,assigned_user_id", { count: "exact" })
-          .order("created_at", { ascending: false })
-          .range(0, 4999),
-      ]);
+      const leadsRes = await sb
+        .from("lawyer_leads")
+        .select("id,submission_id,lawyer_full_name,firm_name,created_at,assigned_user_id", { count: "exact" })
+        .order("created_at", { ascending: false })
+        .range(0, 4999);
 
-      if (teamRowsRes.error) throw teamRowsRes.error;
       if (leadsRes.error) throw leadsRes.error;
-
-      const teamRows = ((teamRowsRes.data ?? []) as unknown as Array<{ user_id: string }>) || [];
-      const teamUserIds = teamRows.map((r) => r.user_id).filter(Boolean);
-
-      let composedTeam: MarketingTeamMemberRow[] = [];
-      if (teamUserIds.length > 0) {
-        const usersRes = await (supabase as unknown as {
-          from: (table: string) => {
-            select: (cols: string) => {
-              in: (col: string, values: string[]) => Promise<{ data: unknown[] | null; error: { message: string } | null }>;
-            };
-          };
-        })
-          .from("app_users")
-          .select("user_id,email,display_name")
-          .in("user_id", teamUserIds);
-
-        if (usersRes.error) throw usersRes.error;
-
-        const users = ((usersRes.data ?? []) as unknown as Array<{ user_id: string; email: string; display_name: string | null }>) || [];
-        const userById = new Map(users.map((u) => [u.user_id, u] as const));
-        composedTeam = teamUserIds
-          .map((id) => {
-            const u = userById.get(id);
-            if (!u) return null;
-            return {
-              user_id: id,
-              email: u.email,
-              display_name: (u.display_name || "").trim() || u.email,
-            };
-          })
-          .filter(Boolean) as MarketingTeamMemberRow[];
-
-        composedTeam.sort((a, b) => a.display_name.localeCompare(b.display_name));
-      }
-
-      setTeam(composedTeam);
       setLeads(((leadsRes.data ?? []) as unknown as LeadRow[]) || []);
     } catch (e) {
       console.error(e);

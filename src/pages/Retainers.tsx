@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Filter, Phone, User, ChevronDown, ChevronUp, Loader2, Trash2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useMarketingTeamFilterAccess } from '@/hooks/useMarketingTeamFilterAccess';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -45,12 +46,6 @@ interface LawyerLead {
   assigned_user_id?: string | null;
 }
 
-type MarketingTeamMember = {
-  user_id: string;
-  display_name: string;
-  email: string;
-};
-
 type AssigneeUser = {
   user_id: string;
   display_name: string | null;
@@ -59,12 +54,16 @@ type AssigneeUser = {
 
 const Retainers = () => {
   const { user, loading } = useAuth();
+  const {
+    marketingTeam,
+    canViewTeamAssigneeFilter,
+    loading: marketingFilterAccessLoading,
+  } = useMarketingTeamFilterAccess(user?.id);
   const navigate = useNavigate();
   const { toast } = useToast();
   const { stages: coldCallStages } = usePipelineStages('cold_call_pipeline');
   const { stages: lawyerPortalStages } = usePipelineStages('lawyer_portal');
   const { stages: submissionPortalStages } = usePipelineStages('submission_portal');
-  const [isAdmin, setIsAdmin] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [leads, setLeads] = useState<LawyerLead[]>([]);
   const [filteredLeads, setFilteredLeads] = useState<LawyerLead[]>([]);
@@ -76,7 +75,6 @@ const Retainers = () => {
   const [vendorOptions, setVendorOptions] = useState<string[]>(['all']);
   const [nameFilter, setNameFilter] = useState('');
   const [assigneeFilter, setAssigneeFilter] = useState<string>('all');
-  const [marketingTeam, setMarketingTeam] = useState<MarketingTeamMember[]>([]);
   const [assigneeById, setAssigneeById] = useState<Record<string, AssigneeUser>>({});
   const didInitAssigneeFilter = useRef(false);
   const [searchDropdownOpen, setSearchDropdownOpen] = useState(false);
@@ -103,48 +101,14 @@ const Retainers = () => {
   }, [user, loading, navigate]);
 
   useEffect(() => {
-    const checkAdmin = async () => {
-      if (!user?.id) return;
-      try {
-        const appUsersQuery = supabase as unknown as {
-          from: (table: string) => {
-            select: (columns: string) => {
-              eq: (column: string, value: string) => {
-                maybeSingle: () => Promise<{ data: unknown; error: { message: string } | null }>;
-              };
-            };
-          };
-        };
-
-        const { data, error } = await appUsersQuery
-          .from('app_users')
-          .select('role')
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        const typed = data as { role?: string } | null;
-        if (!error && typed?.role && ['admin', 'super_admin'].includes(typed.role)) {
-          setIsAdmin(true);
-        } else {
-          setIsAdmin(false);
-        }
-      } catch (e) {
-        console.warn('Failed to check admin role', e);
-        setIsAdmin(false);
-      }
-    };
-
-    checkAdmin();
-  }, [user]);
-
-  useEffect(() => {
     if (!user?.id) return;
     if (didInitAssigneeFilter.current) return;
-    if (!isAdmin) {
+    if (marketingFilterAccessLoading) return;
+    if (!canViewTeamAssigneeFilter) {
       setAssigneeFilter(user.id);
     }
     didInitAssigneeFilter.current = true;
-  }, [isAdmin, user?.id]);
+  }, [canViewTeamAssigneeFilter, marketingFilterAccessLoading, user?.id]);
 
   const handleDeleteLead = useCallback(
     async (leadId: string) => {
@@ -219,54 +183,6 @@ const Retainers = () => {
     } catch (error) {
       console.error('Error fetching vendors:', error);
       // Keep existing options (all) on error to avoid blocking UI
-    }
-  }, []);
-
-  const fetchMarketingTeam = useCallback(async () => {
-    try {
-      const sb = supabase as unknown as {
-        from: (table: string) => {
-          select: (cols: string) => {
-            order: (col: string, opts: { ascending: boolean }) => Promise<{ data: unknown[] | null; error: { message: string } | null }>;
-            in: (col: string, values: string[]) => Promise<{ data: unknown[] | null; error: { message: string } | null }>;
-          };
-        };
-      };
-
-      const teamRes = await sb.from('marketing_team').select('user_id,created_at').order('created_at', { ascending: false });
-      if (teamRes.error) throw teamRes.error;
-
-      const teamRows = (teamRes.data ?? []) as Array<{ user_id: string }>;
-      const teamUserIds = teamRows.map((r) => r.user_id).filter(Boolean);
-
-      if (teamUserIds.length === 0) {
-        setMarketingTeam([]);
-        return;
-      }
-
-      const usersRes = await sb.from('app_users').select('user_id,email,display_name').in('user_id', teamUserIds);
-      if (usersRes.error) throw usersRes.error;
-
-      const users = (usersRes.data ?? []) as Array<{ user_id: string; email: string; display_name: string | null }>;
-      const userById = new Map(users.map((u) => [u.user_id, u] as const));
-
-      const members = teamUserIds
-        .map((id) => {
-          const u = userById.get(id);
-          if (!u) return null;
-          return {
-            user_id: id,
-            email: u.email,
-            display_name: (u.display_name || '').trim() || u.email,
-          } satisfies MarketingTeamMember;
-        })
-        .filter(Boolean) as MarketingTeamMember[];
-
-      members.sort((a, b) => a.display_name.localeCompare(b.display_name));
-      setMarketingTeam(members);
-    } catch (e) {
-      console.warn('Failed to fetch marketing team', e);
-      setMarketingTeam([]);
     }
   }, []);
 
@@ -373,9 +289,8 @@ const Retainers = () => {
     if (user) {
       fetchLeads();
       fetchVendors();
-      fetchMarketingTeam();
     }
-  }, [user, fetchLeads, fetchVendors, fetchMarketingTeam]);
+  }, [user, fetchLeads, fetchVendors]);
 
   useEffect(() => {
     const loadAssignees = async () => {
@@ -612,7 +527,9 @@ const Retainers = () => {
                   <SelectContent>
                     <SelectItem value="all">All</SelectItem>
                     {user?.id ? <SelectItem value={user.id}>My Leads</SelectItem> : null}
-                    {marketingTeam.map((m) => (
+                    {marketingTeam
+                      .filter((m) => m.user_id !== user?.id)
+                      .map((m) => (
                       <SelectItem key={m.user_id} value={m.user_id}>
                         {m.display_name}
                       </SelectItem>
@@ -748,7 +665,7 @@ const Retainers = () => {
                             )}
                           </div>
                           
-                          {isAdmin && (
+                          {canViewTeamAssigneeFilter && (
                             <div className="opacity-0 group-hover:opacity-100 transition-opacity">
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>

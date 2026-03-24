@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useMarketingTeamFilterAccess } from "@/hooks/useMarketingTeamFilterAccess";
 import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeftRight, Loader2, Pencil, RefreshCw, Users, StickyNote, Plus } from "lucide-react";
 import { usePipelineStages, type PipelineStage } from "@/hooks/usePipelineStages";
@@ -46,6 +47,8 @@ export interface TransferPortalRow {
   assigned_user_id?: string | null;
   pipeline_name?: string;
   stage_id?: string;
+  display_stage_key?: string;
+  marketing_source_stage?: string | null;
   submission_date?: string;
   lawyer_full_name?: string;
   firm_name?: string;
@@ -63,18 +66,18 @@ export interface TransferPortalRow {
   updated_at?: string;
 }
 
-type MarketingTeamMember = {
-  user_id: string;
-  display_name: string;
-  email: string;
-};
-
 const TransferPortalPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const {
+    marketingTeam,
+    canViewTeamAssigneeFilter,
+    loading: marketingFilterAccessLoading,
+  } = useMarketingTeamFilterAccess(user?.id);
 
   // --- Dynamic pipeline stages from DB ---
   const { stages: dbTransferStages, loading: transferStagesLoading } = usePipelineStages("cold_call_pipeline");
+  const { stages: dbSubmissionStages } = usePipelineStages("lawyer_portal");
 
   const kanbanStages = useMemo(() => {
     return dbTransferStages.map((s) => ({ key: s.key, label: s.label }));
@@ -92,9 +95,65 @@ const TransferPortalPage = () => {
     return Array.from(new Set(kanbanStages.map((s) => s.label).map((label) => label.trim()).filter(Boolean)));
   }, [kanbanStages]);
 
+  const scheduledMarketingStage = useMemo(() => {
+    return (
+      dbTransferStages.find((stage) => {
+        const key = (stage.key || "").trim().toLowerCase();
+        const label = (stage.label || "").trim().toLowerCase();
+        return (key.includes("scheduled") && key.includes("onboard")) ||
+          (label.includes("scheduled") && label.includes("onboard"));
+      }) ||
+      dbTransferStages.find((stage) => {
+        const key = (stage.key || "").trim().toLowerCase();
+        const label = (stage.label || "").trim().toLowerCase();
+        return (key.includes("scheduled") && key.includes("zoom")) ||
+          (label.includes("scheduled") && label.includes("zoom"));
+      }) ||
+      dbTransferStages[dbTransferStages.length - 1] ||
+      null
+    );
+  }, [dbTransferStages]);
+
+  const readyToMoveForwardStageIds = useMemo(() => {
+    const readyStages = dbSubmissionStages.filter((stage) => {
+      const key = (stage.key || "").trim().toLowerCase();
+      const label = (stage.label || "").trim().toLowerCase();
+      return key === "ready_to_move_forward" || label === "ready to move forward";
+    });
+
+    return new Set(
+      readyStages
+        .flatMap((stage) => [stage.id, stage.key])
+        .map((value) => (value || "").trim())
+        .filter(Boolean)
+    );
+  }, [dbSubmissionStages]);
+
+  const readyToMoveForwardStageKey = useMemo(() => {
+    return (
+      dbSubmissionStages.find((stage) => {
+        const key = (stage.key || "").trim().toLowerCase();
+        const label = (stage.label || "").trim().toLowerCase();
+        return key === "ready_to_move_forward" || label === "ready to move forward";
+      })?.key || 'ready_to_move_forward'
+    );
+  }, [dbSubmissionStages]);
+
+  const resolveMarketingStageKey = useCallback(
+    (value?: string | null): string | null => {
+      const stageId = (value || '').trim();
+      if (!stageId) return null;
+      const asKey = dbTransferStages.find((s) => s.key === stageId);
+      if (asKey?.key) return asKey.key;
+      const legacy = dbTransferStages.find((s) => s.id === stageId);
+      return legacy?.key ?? null;
+    },
+    [dbTransferStages]
+  );
+
   const deriveStageKey = useCallback(
     (row: TransferPortalRow): string => {
-      const stageId = (row.stage_id || '').trim();
+      const stageId = (row.display_stage_key || row.stage_id || '').trim();
       if (!stageId) return kanbanStages[0]?.key ?? 'transfer_api';
       const asKey = dbTransferStages.find((s) => s.key === stageId);
       if (asKey?.key) return asKey.key;
@@ -144,9 +203,7 @@ const TransferPortalPage = () => {
   const [columnPage, setColumnPage] = useState<Record<string, number>>({});
   const [noteCounts, setNoteCounts] = useState<Record<string, number>>({});
 
-  const [isAdmin, setIsAdmin] = useState(false);
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
-  const [marketingTeam, setMarketingTeam] = useState<MarketingTeamMember[]>([]);
   const [didInitAssigneeFilter, setDidInitAssigneeFilter] = useState(false);
 
   const [editOpen, setEditOpen] = useState(false);
@@ -203,96 +260,15 @@ const TransferPortalPage = () => {
 
   const { toast } = useToast();
 
-  const fetchMarketingTeam = useCallback(async () => {
-    try {
-      const sb = supabase as unknown as {
-        from: (table: string) => {
-          select: (cols: string) => {
-            order: (col: string, opts: { ascending: boolean }) => Promise<{ data: unknown; error: { message?: string } | null }>;
-            in: (col: string, values: string[]) => Promise<{ data: unknown; error: { message?: string } | null }>;
-          };
-        };
-      };
-
-      const teamRes = await sb.from('marketing_team').select('user_id,created_at').order('created_at', { ascending: false });
-      if (teamRes.error) throw teamRes.error;
-
-      const teamRows = (teamRes.data ?? []) as Array<{ user_id: string }>;
-      const ids = teamRows.map((r) => r.user_id).filter(Boolean);
-      if (ids.length === 0) {
-        setMarketingTeam([]);
-        return;
-      }
-
-      const usersRes = await sb.from('app_users').select('user_id,email,display_name').in('user_id', ids);
-      if (usersRes.error) throw usersRes.error;
-
-      const users = (usersRes.data ?? []) as Array<{ user_id: string; email: string; display_name: string | null }>;
-      const userById = new Map(users.map((u) => [u.user_id, u] as const));
-
-      const members = ids
-        .map((id) => {
-          const u = userById.get(id);
-          if (!u) return null;
-          return {
-            user_id: id,
-            email: u.email,
-            display_name: (u.display_name || '').trim() || u.email,
-          } satisfies MarketingTeamMember;
-        })
-        .filter(Boolean) as MarketingTeamMember[];
-
-      members.sort((a, b) => a.display_name.localeCompare(b.display_name));
-      setMarketingTeam(members);
-    } catch (e) {
-      console.warn('Failed to fetch marketing team', e);
-      setMarketingTeam([]);
-    }
-  }, []);
-
-  useEffect(() => {
-    const checkAdmin = async () => {
-      if (!user?.id) return;
-      try {
-        const appUsersQuery = supabase as unknown as {
-          from: (table: string) => {
-            select: (columns: string) => {
-              eq: (column: string, value: string) => {
-                maybeSingle: () => Promise<{ data: unknown; error: { message: string } | null }>;
-              };
-            };
-          };
-        };
-
-        const { data, error } = await appUsersQuery
-          .from('app_users')
-          .select('role')
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        const typed = data as { role?: string } | null;
-        if (!error && typed?.role && ['admin', 'super_admin'].includes(typed.role)) {
-          setIsAdmin(true);
-        } else {
-          setIsAdmin(false);
-        }
-      } catch (e) {
-        console.warn('Failed to check admin role', e);
-        setIsAdmin(false);
-      }
-    };
-
-    void checkAdmin();
-  }, [user?.id]);
-
   useEffect(() => {
     if (!user?.id) return;
     if (didInitAssigneeFilter) return;
-    if (!isAdmin) {
+    if (marketingFilterAccessLoading) return;
+    if (!canViewTeamAssigneeFilter) {
       setAssigneeFilter(user.id);
     }
     setDidInitAssigneeFilter(true);
-  }, [didInitAssigneeFilter, isAdmin, user?.id]);
+  }, [canViewTeamAssigneeFilter, didInitAssigneeFilter, marketingFilterAccessLoading, user?.id]);
 
   // Fetch data from Supabase
   const fetchData = useCallback(
@@ -321,7 +297,7 @@ const TransferPortalPage = () => {
           };
         };
 
-        const [transfersRes, transfersCountRes] = await Promise.all([
+        const [transfersRes, transfersCountRes, lawyerPortalRes] = await Promise.all([
           lawyerLeadsQuery
             .from('lawyer_leads')
             .select('*')
@@ -331,6 +307,11 @@ const TransferPortalPage = () => {
             .from('lawyer_leads')
             .select('*', { count: 'exact', head: true })
             .eq('pipeline_name', 'cold_call_pipeline'),
+          lawyerLeadsQuery
+            .from('lawyer_leads')
+            .select('*')
+            .eq('pipeline_name', 'lawyer_portal')
+            .order('created_at', { ascending: false }),
         ]);
 
         if (transfersRes.error) {
@@ -343,14 +324,35 @@ const TransferPortalPage = () => {
           return;
         }
 
+        if (lawyerPortalRes.error) {
+          console.error("Error fetching lawyer portal overlay data:", lawyerPortalRes.error);
+          toast({
+            title: "Error",
+            description: "Failed to fetch transfer portal data",
+            variant: "destructive",
+          });
+          return;
+        }
+
         setAllTimeTransfers(transfersCountRes.count ?? 0);
 
         const transferRows = ((transfersRes.data ?? []) as unknown as TransferPortalRow[]);
+        const lawyerPortalRows = ((lawyerPortalRes.data ?? []) as unknown as TransferPortalRow[]);
+        const overlayRows = lawyerPortalRows
+          .filter((row) => {
+            const marketingStageKey = resolveMarketingStageKey(row.marketing_source_stage);
+            return Boolean(marketingStageKey) || readyToMoveForwardStageIds.has((row.stage_id || '').trim());
+          })
+          .map((row) => ({
+            ...row,
+            display_stage_key: resolveMarketingStageKey(row.marketing_source_stage) || scheduledMarketingStage?.key,
+          }));
+        const combinedRows = [...transferRows, ...overlayRows];
 
-        setData(transferRows);
+        setData(combinedRows);
 
         // Fetch aggregated note counts
-        fetchNoteCounts(transferRows);
+        fetchNoteCounts(combinedRows);
 
         if (showRefreshToast) {
           toast({
@@ -370,7 +372,7 @@ const TransferPortalPage = () => {
         setRefreshing(false);
       }
     },
-    [toast]
+    [readyToMoveForwardStageIds, resolveMarketingStageKey, scheduledMarketingStage?.key, toast]
   );
 
   // Update filtered data whenever data or filters change
@@ -393,7 +395,8 @@ const TransferPortalPage = () => {
 
   const handleOpenEdit = (row: TransferPortalRow) => {
     setEditRow(row);
-    const currentStage = dbTransferStages.find((s) => s.key === row.stage_id) ?? dbTransferStages.find((s) => s.id === row.stage_id);
+    const currentStageId = row.display_stage_key || row.stage_id;
+    const currentStage = dbTransferStages.find((s) => s.key === currentStageId) ?? dbTransferStages.find((s) => s.id === currentStageId);
     setEditStage(currentStage?.label || kanbanStages[0].label);
     setEditNotes('');
     setEditStageOpen(false);
@@ -422,23 +425,51 @@ const TransferPortalPage = () => {
     const nextStage = dbTransferStages.find(s => s.label === nextStageLabel);
     if (!nextStage) return;
 
-    const previousStageId = editRow.stage_id || '';
+    const previousStageId = editRow.display_stage_key || editRow.marketing_source_stage || editRow.stage_id || '';
     const stageChanged = previousStageId !== nextStage.key;
 
     try {
       setEditSaving(true);
 
+      const isLawyerPortalRow = editRow.pipeline_name === 'lawyer_portal';
+      const isLastStage = dbTransferStages.length > 0 && 
+                          nextStage.display_order === Math.max(...dbTransferStages.map(s => s.display_order));
+
       const lawyerLeadsUpdate = supabase as unknown as {
         from: (table: string) => {
-          update: (data: { stage_id: string; additional_notes: string }) => {
+          update: (data: { stage_id?: string; additional_notes: string; pipeline_name?: string; marketing_source_stage?: string | null }) => {
             eq: (column: string, value: string) => Promise<{ error: unknown }>;
           };
         };
       };
 
+      const updateData: {
+        stage_id?: string;
+        additional_notes: string;
+        pipeline_name?: string;
+        marketing_source_stage?: string | null;
+      } = isLawyerPortalRow
+        ? isLastStage
+          ? {
+              additional_notes: editNotes,
+              marketing_source_stage: nextStage.key,
+            }
+          : {
+              stage_id: nextStage.key,
+              additional_notes: editNotes,
+              pipeline_name: 'cold_call_pipeline',
+              marketing_source_stage: null,
+            }
+        : {
+            stage_id: isLastStage ? readyToMoveForwardStageKey : nextStage.key,
+            additional_notes: editNotes,
+            marketing_source_stage: nextStage.key,
+            ...(isLastStage ? { pipeline_name: 'lawyer_portal' } : {}),
+          };
+
       const { error } = await lawyerLeadsUpdate
-        .from('lawyer_leads')
-        .update({ stage_id: nextStage.key, additional_notes: editNotes })
+          .from('lawyer_leads')
+        .update(updateData)
         .eq('id', editRow.id);
 
       if (error) {
@@ -517,25 +548,55 @@ const TransferPortalPage = () => {
         }
       }
 
-      setData((prev) =>
-        prev.map((row) =>
-          row.id === editRow.id
-            ? {
-                ...row,
-                stage_id: nextStage.key,
-                additional_notes: editNotes,
-              }
-            : row
-        )
-      );
+      if (!isLawyerPortalRow && isLastStage) {
+        setEditOpen(false);
+        setEditRow(null);
 
-      setEditOpen(false);
-      setEditRow(null);
+        toast({
+          title: 'Saved',
+          description: 'Lead transitioned to Lawyer Portal - Ready to Move Forward',
+        });
 
-      toast({
-        title: 'Saved',
-        description: 'Transfer updated successfully',
-      });
+        setTimeout(() => {
+          fetchData(false);
+        }, 500);
+      } else if (isLawyerPortalRow && !isLastStage) {
+        setEditOpen(false);
+        setEditRow(null);
+
+        toast({
+          title: 'Saved',
+          description: 'Lead moved back to the marketing pipeline',
+        });
+
+        setTimeout(() => {
+          fetchData(false);
+        }, 500);
+      } else {
+        setData((prev) =>
+          prev.map((row) =>
+            row.id === editRow.id
+              ? {
+                  ...row,
+                  stage_id: isLawyerPortalRow ? row.stage_id : nextStage.key,
+                  display_stage_key: nextStage.key,
+                  marketing_source_stage: isLawyerPortalRow ? nextStage.key : nextStage.key,
+                  additional_notes: editNotes,
+                }
+              : row
+          )
+        );
+
+        setEditOpen(false);
+        setEditRow(null);
+
+        toast({
+          title: 'Saved',
+          description: isLawyerPortalRow
+            ? 'Marketing column updated successfully'
+            : 'Transfer updated successfully',
+        });
+      }
     } finally {
       setEditSaving(false);
     }
@@ -583,10 +644,6 @@ const TransferPortalPage = () => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
-
-  useEffect(() => {
-    void fetchMarketingTeam();
-  }, [fetchMarketingTeam]);
 
   const handleRefresh = () => {
     fetchData(true);
@@ -676,30 +733,114 @@ const TransferPortalPage = () => {
     const stage = dbTransferStages.find(s => s.key === stageKey);
     if (!stage) return;
 
+    const row = data.find((item) => item.id === rowId);
     const prev = data;
-    const next = prev.map((r) => (r.id === rowId ? { ...r, stage_id: stage.key } : r));
+    const next = prev.map((r) =>
+      r.id === rowId
+        ? {
+            ...r,
+            stage_id: row?.pipeline_name === 'lawyer_portal'
+              ? r.stage_id
+              : (stage.display_order === Math.max(...dbTransferStages.map(s => s.display_order))
+                  ? readyToMoveForwardStageKey
+                  : stage.key),
+            display_stage_key: stage.key,
+            marketing_source_stage: stage.key,
+            pipeline_name: row?.pipeline_name === 'lawyer_portal'
+              ? r.pipeline_name
+              : (stage.display_order === Math.max(...dbTransferStages.map(s => s.display_order))
+                  ? 'lawyer_portal'
+                  : r.pipeline_name),
+          }
+        : r
+    );
     setData(next);
 
     try {
+      const isLastStage = dbTransferStages.length > 0 && 
+                          stage.display_order === Math.max(...dbTransferStages.map(s => s.display_order));
+
       const lawyerLeadsUpdate = supabase as unknown as {
         from: (table: string) => {
-          update: (data: { stage_id: string }) => {
+          update: (data: { stage_id?: string; pipeline_name?: string; marketing_source_stage?: string | null }) => {
             eq: (column: string, value: string) => Promise<{ error: unknown }>;
           };
         };
       };
 
-      const { error } = await lawyerLeadsUpdate
-        .from('lawyer_leads')
-        .update({ stage_id: stage.key })
-        .eq('id', rowId);
+      if (row?.pipeline_name === 'lawyer_portal' && !isLastStage) {
+        const { error } = await lawyerLeadsUpdate
+          .from('lawyer_leads')
+          .update({
+            stage_id: stage.key,
+            pipeline_name: 'cold_call_pipeline',
+            marketing_source_stage: null,
+          })
+          .eq('id', rowId);
 
-      if (error) throw error;
+        if (error) throw error;
 
-      toast({
-        title: 'Status Updated',
-        description: `Lead updated to "${stage.label}"`,
-      });
+        toast({
+          title: 'Status Updated',
+          description: 'Lead moved back to the marketing pipeline',
+        });
+
+        setTimeout(() => {
+          fetchData(false);
+        }, 500);
+      } else if (row?.pipeline_name === 'lawyer_portal') {
+        const { error } = await lawyerLeadsUpdate
+          .from('lawyer_leads')
+          .update({ marketing_source_stage: stage.key })
+          .eq('id', rowId);
+
+        if (error) throw error;
+
+        toast({
+          title: 'Status Updated',
+          description: `Lead remains visible in "${stage.label}" on the marketing pipeline`,
+        });
+      } else if (isLastStage) {
+        const updatePayload = supabase as unknown as {
+          from: (table: string) => {
+            update: (data: { stage_id: string; pipeline_name: string; marketing_source_stage: string }) => {
+              eq: (column: string, value: string) => Promise<{ error: unknown }>;
+            };
+          };
+        };
+
+        const { error } = await updatePayload
+          .from('lawyer_leads')
+          .update({ 
+            stage_id: readyToMoveForwardStageKey,
+            pipeline_name: 'lawyer_portal',
+            marketing_source_stage: stage.key,
+          })
+          .eq('id', rowId);
+
+        if (error) throw error;
+
+        toast({
+          title: 'Status Updated',
+          description: `Lead transitioned to Lawyer Portal - Ready to Move Forward`,
+        });
+        
+        setTimeout(() => {
+          fetchData(false);
+        }, 500);
+      } else {
+        const { error } = await lawyerLeadsUpdate
+          .from('lawyer_leads')
+          .update({ stage_id: stage.key, marketing_source_stage: stage.key })
+          .eq('id', rowId);
+
+        if (error) throw error;
+
+        toast({
+          title: 'Status Updated',
+          description: `Lead updated to "${stage.label}"`,
+        });
+      }
     } catch (e) {
       console.error('Error updating lead status:', e);
       setData(prev);
@@ -736,7 +877,8 @@ const TransferPortalPage = () => {
     const csvContent = [
       headers.join(','),
       ...stageFilteredData.map(row => {
-        const currentStage = dbTransferStages.find((s) => s.key === row.stage_id) ?? dbTransferStages.find((s) => s.id === row.stage_id);
+        const currentStageId = row.display_stage_key || row.stage_id;
+        const currentStage = dbTransferStages.find((s) => s.key === currentStageId) ?? dbTransferStages.find((s) => s.id === currentStageId);
         return [
           row.submission_id,
           row.lawyer_full_name || '',
@@ -836,7 +978,9 @@ const TransferPortalPage = () => {
                   <SelectGroup>
                     <SelectItem value="all">All</SelectItem>
                     {user?.id ? <SelectItem value={user.id}>My Leads</SelectItem> : null}
-                    {marketingTeam.map((m) => (
+                    {marketingTeam
+                      .filter((m) => m.user_id !== user?.id)
+                      .map((m) => (
                       <SelectItem key={m.user_id} value={m.user_id}>
                         {m.display_name}
                       </SelectItem>
@@ -1039,7 +1183,8 @@ const TransferPortalPage = () => {
                       <tbody>
                         {currentPageData.map((row) => {
                           const stageKey = deriveStageKey(row);
-                          const currentStage = dbTransferStages.find(s => s.id === row.stage_id);
+                          const currentStageId = row.display_stage_key || row.stage_id;
+                          const currentStage = dbTransferStages.find(s => s.key === currentStageId) ?? dbTransferStages.find(s => s.id === currentStageId);
                           const stageLabel = currentStage?.label || kanbanStages.find((stage) => stage.key === stageKey)?.label;
                           return (
                             <tr key={row.id} className="border-b last:border-0">

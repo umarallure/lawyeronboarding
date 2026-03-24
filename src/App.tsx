@@ -39,6 +39,8 @@ import AdminAnalytics from "./pages/AdminAnalytics";
 import UserManagement from "./pages/UserManagement";
 import MarketingTeamPage from "./pages/MarketingTeamPage";
 import LeadAssignmentPage from "./pages/LeadAssignmentPage";
+import AccountOrderManagementPage from "./pages/AccountOrderManagementPage";
+import AccountOrderDetailPage from "./pages/AccountOrderDetailPage";
 import AppShell from "@/components/layout/AppShell";
 import { Navigate } from "react-router-dom";
 
@@ -142,6 +144,28 @@ const App = () => (
                 <ProtectedRoute>
                   <AppShell title="Marketing Team">
                     <MarketingTeamPage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/account-management/orders"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Account Management">
+                    <AccountOrderManagementPage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/account-management/orders/:orderId"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Account Management">
+                    <AccountOrderDetailPage />
                   </AppShell>
                 </ProtectedRoute>
               }

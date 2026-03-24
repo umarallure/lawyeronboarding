@@ -1,14 +1,13 @@
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
-  BarChart3,
+  ChevronDown,
+  ChevronRight,
   Grid3X3,
   LayoutDashboard,
-  Map,
   Package,
   Users,
   LogOut,
-  Zap,
   Eye,
   CheckCircle,
   PanelLeftClose,
@@ -34,10 +33,17 @@ import { supabase } from '@/integrations/supabase/client';
 
 type NavItem = {
   label: string;
-  to: string;
   icon: ReactNode;
+  to?: string;
   end?: boolean;
   show?: boolean;
+  groupKey?: string;
+  children?: Array<{
+    label: string;
+    to: string;
+    end?: boolean;
+    show?: boolean;
+  }>;
 };
 
 const linkBaseClass =
@@ -86,6 +92,9 @@ const AppShell = ({
   });
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
+    account_management: location.pathname.startsWith('/account-management'),
+  });
 
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
@@ -144,6 +153,12 @@ const AppShell = ({
     if (isDailyDealFlowRoute) return;
     setSidebarCollapsed(false);
   }, [isDailyDealFlowRoute, location.pathname]);
+
+  useEffect(() => {
+    if (location.pathname.startsWith('/account-management')) {
+      setExpandedGroups((prev) => ({ ...prev, account_management: true }));
+    }
+  }, [location.pathname]);
 
   useEffect(() => {
     // If a route forces a default (e.g., Daily Outreach Report), apply it immediately.
@@ -210,6 +225,17 @@ const AppShell = ({
         show: isSuperAdmin,
       },
       {
+        label: 'Account Management',
+        icon: <TbUserShield className="h-4 w-4 text-current" />,
+        groupKey: 'account_management',
+        children: [
+          {
+            label: 'Order Management',
+            to: '/account-management/orders',
+          },
+        ],
+      },
+      {
         label: 'Lawyers',
         to: '/leads',
         icon: <Users className="h-4 w-4 text-current" />,
@@ -245,6 +271,13 @@ const AppShell = ({
     if (!email) return '?';
     return email.trim().charAt(0).toUpperCase();
   }, [user?.email]);
+
+  const isNavItemActive = (to?: string, end?: boolean) => {
+    if (!to) return false;
+    if (activeNavOverride) return activeNavOverride === to;
+    if (end) return location.pathname === to;
+    return location.pathname === to || location.pathname.startsWith(`${to}/`);
+  };
 
   return (
     <div className="h-screen w-full bg-background overflow-hidden">
@@ -287,26 +320,102 @@ const AppShell = ({
           <nav
             className="px-2 py-3 space-y-1 flex-1 overflow-y-auto"
           >
-            {navItems.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.end}
-                className={({ isActive }) =>
-                  `${linkBaseClass} ${
-                    isSidebarCollapsed ? "justify-center px-0" : ""
-                  } ${
-                    (activeNavOverride ? activeNavOverride === item.to : isActive)
-                      ? "bg-primary/10 text-primary border-primary/20"
-                      : "text-muted-foreground hover:bg-primary/5 hover:text-primary hover:border-primary/20"
-                  }`
-                }
-                title={isSidebarCollapsed ? item.label : undefined}
-              >
-                {item.icon}
-                {!isSidebarCollapsed && <span>{item.label}</span>}
-              </NavLink>
-            ))}
+            {navItems.map((item) => {
+              const visibleChildren = (item.children || []).filter((child) => child.show !== false);
+              const hasChildren = visibleChildren.length > 0;
+              const isGroupOpen = item.groupKey ? Boolean(expandedGroups[item.groupKey]) : false;
+              const hasActiveChild = visibleChildren.some((child) => isNavItemActive(child.to, child.end));
+              const primaryTo = item.to || visibleChildren[0]?.to;
+
+              if (hasChildren && isSidebarCollapsed && primaryTo) {
+                return (
+                  <NavLink
+                    key={item.groupKey || item.label}
+                    to={primaryTo}
+                    className={() =>
+                      `${linkBaseClass} justify-center px-0 ${
+                        hasActiveChild
+                          ? "bg-primary/10 text-primary border-primary/20"
+                          : "text-muted-foreground hover:bg-primary/5 hover:text-primary hover:border-primary/20"
+                      }`
+                    }
+                    title={item.label}
+                  >
+                    {item.icon}
+                  </NavLink>
+                );
+              }
+
+              if (hasChildren) {
+                return (
+                  <div key={item.groupKey || item.label} className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedGroups((prev) => ({
+                          ...prev,
+                          [item.groupKey || item.label]: !prev[item.groupKey || item.label],
+                        }))
+                      }
+                      className={`${linkBaseClass} w-full justify-between text-left ${
+                        hasActiveChild
+                          ? "bg-primary/10 text-primary border-primary/20"
+                          : "text-muted-foreground hover:bg-primary/5 hover:text-primary hover:border-primary/20"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2 min-w-0">
+                        {item.icon}
+                        <span className="truncate">{item.label}</span>
+                      </span>
+                      {isGroupOpen ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
+                    </button>
+
+                    {isGroupOpen ? (
+                      <div className="ml-4 space-y-1 border-l border-sidebar-border pl-3">
+                        {visibleChildren.map((child) => (
+                          <NavLink
+                            key={child.to}
+                            to={child.to}
+                            end={child.end}
+                            className={() =>
+                              `${linkBaseClass} py-1.5 ${
+                                isNavItemActive(child.to, child.end)
+                                  ? "bg-primary/10 text-primary border-primary/20"
+                                  : "text-muted-foreground hover:bg-primary/5 hover:text-primary hover:border-primary/20"
+                              }`
+                            }
+                          >
+                            <Package className="h-3.5 w-3.5 text-current" />
+                            <span>{child.label}</span>
+                          </NavLink>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              }
+
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to!}
+                  end={item.end}
+                  className={() =>
+                    `${linkBaseClass} ${
+                      isSidebarCollapsed ? "justify-center px-0" : ""
+                    } ${
+                      isNavItemActive(item.to, item.end)
+                        ? "bg-primary/10 text-primary border-primary/20"
+                        : "text-muted-foreground hover:bg-primary/5 hover:text-primary hover:border-primary/20"
+                    }`
+                  }
+                  title={isSidebarCollapsed ? item.label : undefined}
+                >
+                  {item.icon}
+                  {!isSidebarCollapsed && <span>{item.label}</span>}
+                </NavLink>
+              );
+            })}
           </nav>
         </aside>
 
