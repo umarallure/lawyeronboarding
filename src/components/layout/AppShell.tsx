@@ -251,8 +251,16 @@ const AppShell = ({
         groupKey: 'account_management',
         children: [
           {
+            label: 'Quick Actions',
+            to: '/account-management/quick-actions',
+          },
+          {
             label: 'Order Management',
             to: '/account-management/orders',
+          },
+          {
+            label: 'Onboarding Management',
+            to: '/account-management/onboarding',
           },
         ],
       },

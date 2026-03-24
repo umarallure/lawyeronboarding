@@ -40,6 +40,8 @@ import UserManagement from "./pages/UserManagement";
 import MarketingTeamPage from "./pages/MarketingTeamPage";
 import LeadAssignmentPage from "./pages/LeadAssignmentPage";
 import AccountOrderManagementPage from "./pages/AccountOrderManagementPage";
+import QuickActionsPage from "./pages/QuickActionsPage";
+import OnboardingManagementPage from "./pages/OnboardingManagementPage";
 import AccountOrderDetailPage from "./pages/AccountOrderDetailPage";
 import AppShell from "@/components/layout/AppShell";
 import { Navigate } from "react-router-dom";
@@ -166,6 +168,28 @@ const App = () => (
                 <ProtectedRoute>
                   <AppShell title="Account Management">
                     <AccountOrderDetailPage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/account-management/quick-actions"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Quick Actions">
+                    <QuickActionsPage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/account-management/onboarding"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Onboarding Management">
+                    <OnboardingManagementPage />
                   </AppShell>
                 </ProtectedRoute>
               }
