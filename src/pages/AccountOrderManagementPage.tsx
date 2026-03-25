@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, BriefcaseBusiness, Clock3, Package, RefreshCw, Search, Users } from "lucide-react";
+import { AlertCircle, BriefcaseBusiness, Clock3, Package, RefreshCw, Search, Users, Pencil, Trash2, MoreHorizontal, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +23,21 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type OrderStatus = "OPEN" | "FULFILLED" | "EXPIRED";
 
@@ -162,10 +177,19 @@ const AccountOrderManagementPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [attorneyById, setAttorneyById] = useState<Record<string, AttorneyProfileRow>>({});
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [orderToDelete, setOrderToDelete] = useState<OrderRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [query, setQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<StatusFilter>("all");
   const [selectedCaseType, setSelectedCaseType] = useState<string>("all");
+  const [selectedLawyer, setSelectedLawyer] = useState<string>("all");
+  const [dateRange, setDateRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const ITEMS_PER_PAGE = pageSize;
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -245,12 +269,31 @@ const AccountOrderManagementPage = () => {
     );
   }, [orders]);
 
+  const lawyerOptions = useMemo(() => {
+    return Object.values(lawyerById).map((lawyer) => ({
+      id: lawyer.user_id,
+      name: (attorneyById[lawyer.user_id]?.full_name || "").trim() || lawyer.display_name || lawyer.email || "Unknown",
+    })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [lawyerById, attorneyById]);
+
   const filteredOrders = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
     return orders.filter((order) => {
       if (selectedStatus !== "all" && order.status !== selectedStatus) return false;
       if (selectedCaseType !== "all" && normalizeCaseType(order.case_type) !== selectedCaseType) return false;
+      if (selectedLawyer !== "all" && order.lawyer_id !== selectedLawyer) return false;
+      
+      if (dateRange.start) {
+        const orderDate = new Date(order.created_at);
+        const startDate = new Date(dateRange.start);
+        if (orderDate < startDate) return false;
+      }
+      if (dateRange.end) {
+        const orderDate = new Date(order.created_at);
+        const endDate = new Date(dateRange.end);
+        if (orderDate > endDate) return false;
+      }
 
       if (!normalizedQuery) return true;
 
@@ -291,12 +334,34 @@ const AccountOrderManagementPage = () => {
     };
   }, [orders]);
 
-  const openOrderDetail = useCallback(
-    (orderId: string) => {
-      navigate(`/account-management/orders/${orderId}`);
-    },
-    [navigate]
-  );
+  const handleDeleteClick = useCallback((order: OrderRow) => {
+    setOrderToDelete(order);
+    setDeleteDialogOpen(true);
+  }, []);
+
+  const confirmDelete = useCallback(async () => {
+    if (!orderToDelete) return;
+    
+    setDeleting(true);
+    try {
+      const { error: deleteError } = await supabase
+        .from("orders")
+        .delete()
+        .eq("id", orderToDelete.id);
+
+      if (deleteError) {
+        throw new Error(deleteError.message);
+      }
+
+      setOrders((prev) => prev.filter((o) => o.id !== orderToDelete.id));
+      setDeleteDialogOpen(false);
+      setOrderToDelete(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete order");
+    } finally {
+      setDeleting(false);
+    }
+  }, [orderToDelete]);
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-6">
@@ -421,10 +486,41 @@ const AccountOrderManagementPage = () => {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
 
-            <div className="text-sm text-muted-foreground">
-              Ordered newest first so recent account activity stays front and center.
+              <div className="w-full md:w-52">
+                <Select value={selectedLawyer} onValueChange={(value) => { setSelectedLawyer(value); setCurrentPage(1); }}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Lawyer" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Lawyers</SelectItem>
+                    {lawyerOptions.map((lawyer) => (
+                      <SelectItem key={lawyer.id} value={lawyer.id}>
+                        {lawyer.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="date"
+                  value={dateRange.start}
+                  onChange={(e) => { setDateRange(prev => ({ ...prev, start: e.target.value })); setCurrentPage(1); }}
+                  className="w-[140px]"
+                  placeholder="Start date"
+                />
+                <span className="text-muted-foreground">-</span>
+                <Input
+                  type="date"
+                  value={dateRange.end}
+                  onChange={(e) => { setDateRange(prev => ({ ...prev, end: e.target.value })); setCurrentPage(1); }}
+                  className="w-[140px]"
+                  placeholder="End date"
+                />
+              </div>
             </div>
           </div>
 
@@ -440,12 +536,13 @@ const AccountOrderManagementPage = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead className="min-w-[260px]">Lawyer Account</TableHead>
-                  <TableHead className="min-w-[250px]">Order Details</TableHead>
+                  <TableHead className="min-w-[150px]">Case Type</TableHead>
                   <TableHead className="min-w-[180px]">Target States</TableHead>
                   <TableHead className="min-w-[220px]">Quota Health</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead>Expires</TableHead>
+                  <TableHead className="w-[80px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -465,8 +562,6 @@ const AccountOrderManagementPage = () => {
                   return (
                     <TableRow
                       key={order.id}
-                      className="cursor-pointer transition-colors hover:bg-muted/40"
-                      onClick={() => openOrderDetail(order.id)}
                     >
                       <TableCell className="align-top">
                         <div className="space-y-1">
@@ -477,22 +572,10 @@ const AccountOrderManagementPage = () => {
                       </TableCell>
 
                       <TableCell className="align-top">
-                        <div className="space-y-2">
-                          <div>
-                            <div className="font-medium">{getCaseTypeLabel(order.case_type)}</div>
-                            <div className="text-sm text-muted-foreground">
-                              {order.case_subtype ? startCase(order.case_subtype) : "No subtype"}
-                            </div>
-                          </div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {criteriaSummary.slice(0, 2).map((item) => (
-                              <Badge key={`${order.id}-${item}`} variant="outline" className="max-w-[220px] truncate">
-                                {item}
-                              </Badge>
-                            ))}
-                            {criteriaSummary.length > 2 ? (
-                              <Badge variant="outline">+{criteriaSummary.length - 2} more</Badge>
-                            ) : null}
+                        <div className="space-y-1">
+                          <div className="font-medium">{getCaseTypeLabel(order.case_type)}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {order.case_subtype ? startCase(order.case_subtype) : "-"}
                           </div>
                         </div>
                       </TableCell>
@@ -539,13 +622,39 @@ const AccountOrderManagementPage = () => {
                         </div>
                       </TableCell>
 
+                      <TableCell className="align-top">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => navigate(`/account-management/orders/${order.id}?edit=true`)}
+                            >
+                              <Pencil className="mr-2 h-4 w-4" />
+                              Edit Order
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => handleDeleteClick(order)}
+                              className="text-red-600 focus:text-red-600"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete Order
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+
                     </TableRow>
                   );
                 })}
 
                 {!loading && filteredOrders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="py-12 text-center">
+                    <TableCell colSpan={8} className="py-12 text-center">
                       <div className="space-y-2">
                         <div className="text-sm font-medium">No orders match these filters</div>
                         <div className="text-sm text-muted-foreground">
@@ -558,8 +667,77 @@ const AccountOrderManagementPage = () => {
               </TableBody>
             </Table>
           </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 pt-4 border-t">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Show</span>
+              <Select
+                value={String(pageSize)}
+                onValueChange={(value) => { setPageSize(Number(value)); setCurrentPage(1); }}
+              >
+                <SelectTrigger className="w-[80px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="25">25</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
+              <span className="text-sm text-muted-foreground">of {filteredOrders.length} results</span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-sm">
+                Page {currentPage} of {totalPages || 1}
+              </span>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
+
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Order</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this order? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          {orderToDelete && (
+            <div className="py-2">
+              <p className="text-sm text-muted-foreground">
+                Order ID: <span className="font-mono text-xs">{orderToDelete.id}</span>
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete} disabled={deleting}>
+              {deleting ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
