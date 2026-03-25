@@ -270,11 +270,11 @@ const AccountOrderManagementPage = () => {
   }, [orders]);
 
   const lawyerOptions = useMemo(() => {
-    return Object.values(lawyerById).map((lawyer) => ({
+    return Object.values(attorneyById).map((lawyer) => ({
       id: lawyer.user_id,
-      name: (attorneyById[lawyer.user_id]?.full_name || "").trim() || lawyer.display_name || lawyer.email || "Unknown",
+      name: (lawyer.full_name || "").trim() || lawyer.primary_email || "Unknown",
     })).sort((a, b) => a.name.localeCompare(b.name));
-  }, [lawyerById, attorneyById]);
+  }, [attorneyById]);
 
   const filteredOrders = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -316,7 +316,11 @@ const AccountOrderManagementPage = () => {
 
       return haystack.includes(normalizedQuery);
     });
-  }, [attorneyById, orders, query, selectedCaseType, selectedStatus]);
+  }, [attorneyById, orders, query, selectedCaseType, selectedStatus, selectedLawyer, dateRange]);
+
+  const totalPages = useMemo(() => {
+    return Math.ceil(filteredOrders.length / pageSize) || 1;
+  }, [filteredOrders.length, pageSize]);
 
   const stats = useMemo(() => {
     const openOrders = orders.filter((order) => order.status === "OPEN");
