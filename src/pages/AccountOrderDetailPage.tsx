@@ -216,6 +216,7 @@ const AccountOrderDetailPage = () => {
   const roundedProgress = roundPercent(progress);
   const attorneyProfileName = pickFirstString(attorneyProfile, ["full_name", "display_name", "name", "attorney_name"]);
   const attorneyPhone = pickFirstString(attorneyProfile, [
+    "direct_phone",
     "phone_number",
     "primary_phone",
     "phone",
