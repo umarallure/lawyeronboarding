@@ -25,7 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useMarketingTeamFilterAccess } from "@/hooks/useMarketingTeamFilterAccess";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeftRight, Loader2, Pencil, RefreshCw, Users, StickyNote, Plus } from "lucide-react";
+import { ArrowLeftRight, Calendar, Loader2, Pencil, RefreshCw, Users, StickyNote, Plus, PhoneCall } from "lucide-react";
 import { usePipelineStages, type PipelineStage } from "@/hooks/usePipelineStages";
 
 type UntypedSb = {
@@ -82,6 +82,38 @@ const TransferPortalPage = () => {
   const kanbanStages = useMemo(() => {
     return dbTransferStages.map((s) => ({ key: s.key, label: s.label }));
   }, [dbTransferStages]);
+
+  const normalize = useCallback((value: string | null | undefined) => (value ?? "").trim().toLowerCase(), []);
+  const fingerprint = useCallback(
+    (value: string | null | undefined) => normalize(value).replace(/[^a-z0-9]+/g, ""),
+    [normalize]
+  );
+
+  const stageKeySets = useMemo(() => {
+    const contactedFingerprint = "contacted";
+
+    const contacted = dbTransferStages
+      .filter((s) => fingerprint(s.key) === contactedFingerprint || fingerprint(s.label) === contactedFingerprint)
+      .map((s) => s.key);
+
+    const scheduledForZoom = dbTransferStages
+      .filter((s) => {
+        const key = normalize(s.key);
+        const label = normalize(s.label);
+        return (key.includes("scheduled") && key.includes("zoom")) || (label.includes("scheduled") && label.includes("zoom"));
+      })
+      .map((s) => s.key);
+
+    const scheduledForOnboarding = dbTransferStages
+      .filter((s) => {
+        const key = normalize(s.key);
+        const label = normalize(s.label);
+        return (key.includes("scheduled") && key.includes("onboard")) || (label.includes("scheduled") && label.includes("onboard"));
+      })
+      .map((s) => s.key);
+
+    return { contacted, scheduledForZoom, scheduledForOnboarding };
+  }, [dbTransferStages, fingerprint, normalize]);
 
   const stageTheme = useMemo(() => {
     const theme: Record<string, { column: string }> = {};
@@ -188,7 +220,6 @@ const TransferPortalPage = () => {
   const [filteredData, setFilteredData] = useState<TransferPortalRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [allTimeTransfers, setAllTimeTransfers] = useState(0);
   const [showDuplicates, setShowDuplicates] = useState(true);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -277,7 +308,6 @@ const TransferPortalPage = () => {
         setRefreshing(true);
 
         type QueryRes = { data: unknown[] | null; error: { message?: string } | null };
-        type CountRes = { count: number | null; error: { message?: string } | null };
 
         const lawyerLeadsQuery = supabase as unknown as {
           from: (table: string) => {
@@ -289,24 +319,12 @@ const TransferPortalPage = () => {
           };
         };
 
-        const lawyerLeadsCountQuery = supabase as unknown as {
-          from: (table: string) => {
-            select: (columns: string, options: { count: string; head: boolean }) => {
-              eq: (column: string, value: string) => Promise<CountRes>;
-            };
-          };
-        };
-
-        const [transfersRes, transfersCountRes, lawyerPortalRes] = await Promise.all([
+        const [transfersRes, lawyerPortalRes] = await Promise.all([
           lawyerLeadsQuery
             .from('lawyer_leads')
             .select('*')
             .eq('pipeline_name', 'cold_call_pipeline')
             .order('created_at', { ascending: false }),
-          lawyerLeadsCountQuery
-            .from('lawyer_leads')
-            .select('*', { count: 'exact', head: true })
-            .eq('pipeline_name', 'cold_call_pipeline'),
           lawyerLeadsQuery
             .from('lawyer_leads')
             .select('*')
@@ -315,10 +333,10 @@ const TransferPortalPage = () => {
         ]);
 
         if (transfersRes.error) {
-          console.error("Error fetching transfer portal data:", transfersRes.error);
+          console.error("Error fetching contacts data:", transfersRes.error);
           toast({
             title: "Error",
-            description: "Failed to fetch transfer portal data",
+            description: "Failed to fetch contacts data",
             variant: "destructive",
           });
           return;
@@ -328,13 +346,11 @@ const TransferPortalPage = () => {
           console.error("Error fetching lawyer portal overlay data:", lawyerPortalRes.error);
           toast({
             title: "Error",
-            description: "Failed to fetch transfer portal data",
+            description: "Failed to fetch contacts data",
             variant: "destructive",
           });
           return;
         }
-
-        setAllTimeTransfers(transfersCountRes.count ?? 0);
 
         const transferRows = ((transfersRes.data ?? []) as unknown as TransferPortalRow[]);
         const lawyerPortalRows = ((lawyerPortalRes.data ?? []) as unknown as TransferPortalRow[]);
@@ -386,6 +402,24 @@ const TransferPortalPage = () => {
     if (selectedStage === "all") return filteredData;
     return filteredData.filter((row) => deriveStageKey(row) === selectedStage);
   }, [filteredData, selectedStage, deriveStageKey]);
+
+  const marketingPipelineStats = useMemo(() => {
+    const totalContacts = filteredData.length;
+    const contactedCount = filteredData.filter((row) => stageKeySets.contacted.includes(deriveStageKey(row))).length;
+    const scheduledForZoomCount = filteredData.filter((row) =>
+      stageKeySets.scheduledForZoom.includes(deriveStageKey(row))
+    ).length;
+    const scheduledForOnboardingCount = filteredData.filter((row) =>
+      stageKeySets.scheduledForOnboarding.includes(deriveStageKey(row))
+    ).length;
+
+    return {
+      totalContacts,
+      contactedCount,
+      scheduledForZoomCount,
+      scheduledForOnboardingCount,
+    };
+  }, [filteredData, deriveStageKey, stageKeySets]);
 
   const totalPages = Math.max(1, Math.ceil(stageFilteredData.length / itemsPerPage));
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -475,7 +509,7 @@ const TransferPortalPage = () => {
       if (error) {
         toast({
           title: 'Error',
-          description: 'Failed to update transfer',
+          description: 'Failed to update contact',
           variant: 'destructive',
         });
         return;
@@ -594,7 +628,7 @@ const TransferPortalPage = () => {
           title: 'Saved',
           description: isLawyerPortalRow
             ? 'Marketing column updated successfully'
-            : 'Transfer updated successfully',
+            : 'Contact updated successfully',
         });
       }
     } finally {
@@ -897,7 +931,7 @@ const TransferPortalPage = () => {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `transfer-portal-${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `contacts-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
 
@@ -920,18 +954,46 @@ const TransferPortalPage = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-7xl mx-auto space-y-6">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-1">
-            <Card className="w-full max-w-sm">
+        <div className="container mx-auto px-4 py-8">
+          <div className="max-w-7xl mx-auto space-y-6">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Total Transfers
-                </CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Total Contacts</CardTitle>
               </CardHeader>
               <CardContent className="flex items-center justify-between">
-                <div className="text-3xl font-semibold">{allTimeTransfers}</div>
+                <div className="text-3xl font-semibold">{marketingPipelineStats.totalContacts}</div>
                 <ArrowLeftRight className="h-10 w-10 text-primary" />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Contacted</CardTitle>
+              </CardHeader>
+              <CardContent className="flex items-center justify-between">
+                <div className="text-3xl font-semibold">{marketingPipelineStats.contactedCount}</div>
+                <Users className="h-10 w-10 text-primary" />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Scheduled for Zoom</CardTitle>
+              </CardHeader>
+              <CardContent className="flex items-center justify-between">
+                <div className="text-3xl font-semibold">{marketingPipelineStats.scheduledForZoomCount}</div>
+                <PhoneCall className="h-10 w-10 text-primary" />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Scheduled for Onboarding</CardTitle>
+              </CardHeader>
+              <CardContent className="flex items-center justify-between">
+                <div className="text-3xl font-semibold">{marketingPipelineStats.scheduledForOnboardingCount}</div>
+                <Calendar className="h-10 w-10 text-primary" />
               </CardContent>
             </Card>
           </div>
@@ -941,7 +1003,7 @@ const TransferPortalPage = () => {
               <Input
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search transfers..."
+                placeholder="Search contacts..."
                 className="w-56"
               />
 
@@ -976,7 +1038,7 @@ const TransferPortalPage = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="all">All Leads</SelectItem>
                     {user?.id ? <SelectItem value={user.id}>My Leads</SelectItem> : null}
                     {marketingTeam
                       .filter((m) => m.user_id !== user?.id)
@@ -1005,7 +1067,7 @@ const TransferPortalPage = () => {
                 ))}
               </div>
               <Badge variant="secondary" className="px-2.5 py-1 shrink-0">
-                {allTimeTransfers} transfers
+                {stageFilteredData.length} contacts
               </Badge>
               <Button variant="outline" size="sm" onClick={handleExport}>
                 Export CSV
@@ -1159,13 +1221,13 @@ const TransferPortalPage = () => {
             <Card>
               <CardHeader className="border-b">
                 <CardTitle className="text-base font-semibold">
-                  Transfers ({stageFilteredData.length})
+                  Contacts ({stageFilteredData.length})
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
                 {stageFilteredData.length === 0 ? (
                   <div className="py-10 text-center text-muted-foreground">
-                    No transfer records found for the selected filters.
+                    No contact records found for the selected filters.
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
@@ -1257,7 +1319,7 @@ const TransferPortalPage = () => {
           >
             <DialogContent className="sm:max-w-[520px]">
               <DialogHeader>
-                <DialogTitle>Edit Transfer</DialogTitle>
+                <DialogTitle>Edit Contact</DialogTitle>
               </DialogHeader>
 
               <div className="space-y-4">

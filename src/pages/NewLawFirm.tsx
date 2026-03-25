@@ -6,37 +6,35 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DatePicker } from "@/components/ui/date-picker";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Building2, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDateToEST } from "@/lib/dateUtils";
 import { useAuth } from "@/hooks/useAuth";
 import { usePipelineStages } from "@/hooks/usePipelineStages";
 
-const NewCallback = () => {
+const NewLawFirm = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
+
   const [selectedPipeline, setSelectedPipeline] = useState<string>("cold_call_pipeline");
   const { stages: portalStages, loading: stagesLoading } = usePipelineStages(selectedPipeline);
-  const [lawyerFullName, setLawyerFullName] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [email, setEmail] = useState("");
-  const [streetAddress, setStreetAddress] = useState("");
-  const [city, setCity] = useState("");
-  const [state, setState] = useState("");
-  const [zipCode, setZipCode] = useState("");
+
   const [firmName, setFirmName] = useState("");
   const [firmAddress, setFirmAddress] = useState("");
   const [firmPhoneNo, setFirmPhoneNo] = useState("");
+  const [firmEmail, setFirmEmail] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [zipCode, setZipCode] = useState("");
   const [profileDescription, setProfileDescription] = useState("");
   const [additionalNotes, setAdditionalNotes] = useState("");
   const [stageId, setStageId] = useState<string>("");
   const [source, setSource] = useState("");
   const [campaignSoftware, setCampaignSoftware] = useState("");
-  
+
   const generateSubmissionId = () => {
     const timestamp = Date.now();
     const random = Math.floor(Math.random() * 1000000);
@@ -65,10 +63,10 @@ const NewCallback = () => {
     setIsSubmitting(true);
 
     try {
-      if (!lawyerFullName || !phoneNumber) {
+      if (!firmName) {
         toast({
           title: "Validation Error",
-          description: "Please fill in all required fields (Name, Phone)",
+          description: "Please fill in the required field (Law Firm Name).",
           variant: "destructive",
         });
         return;
@@ -86,14 +84,13 @@ const NewCallback = () => {
         firm_name: string | null;
         firm_address: string | null;
         firm_phone_no: string | null;
-        profile_description: string | null;
-        phone_number: string;
         email: string | null;
-        street_address: string | null;
+        profile_description: string | null;
+        additional_notes: string | null;
         city: string | null;
         state: string | null;
         zip_code: string | null;
-        additional_notes: string | null;
+        phone_number: string | null;
         source: string | null;
         campaign_software: string | null;
         entity_type: string | null;
@@ -104,42 +101,37 @@ const NewCallback = () => {
         stage_id: stageId || null,
         submission_id: submissionId,
         submission_date: formatDateToEST(new Date()),
-        lawyer_full_name: lawyerFullName,
+        lawyer_full_name: firmName,
         firm_name: firmName || null,
         firm_address: firmAddress || null,
         firm_phone_no: firmPhoneNo || null,
+        email: firmEmail || null,
         profile_description: profileDescription || null,
-        phone_number: phoneNumber,
-        email: email || null,
-        street_address: streetAddress || null,
+        additional_notes: additionalNotes || null,
         city: city || null,
         state: state || null,
         zip_code: zipCode || null,
-        additional_notes: additionalNotes || null,
+        phone_number: firmPhoneNo || null,
         source: source || null,
         campaign_software: campaignSoftware || null,
-        entity_type: "attorney",
-        profile_type: "lawyer",
+        entity_type: "firm",
+        profile_type: "law_firm",
       };
 
       // Insert into lawyer_leads table
       const supabaseLeads = supabase as unknown as {
         from: (table: string) => {
-          insert: (
-            data: typeof leadData[]
-          ) => Promise<{ error: unknown }>;
+          insert: (data: typeof leadData[]) => Promise<{ error: unknown }>;
         };
       };
 
-      const { error: insertError } = await supabaseLeads
-        .from("lawyer_leads")
-        .insert([leadData]);
+      const { error: insertError } = await supabaseLeads.from("lawyer_leads").insert([leadData]);
 
       if (insertError) {
-        console.error("Error creating lead:", insertError);
+        console.error("Error creating law firm:", insertError);
         toast({
           title: "Error",
-          description: "Failed to create new lead entry",
+          description: "Failed to create new law firm entry",
           variant: "destructive",
         });
         return;
@@ -147,11 +139,10 @@ const NewCallback = () => {
 
       toast({
         title: "Success",
-        description: "New lead created successfully",
+        description: "New law firm created successfully",
       });
 
       navigate("/leads");
-
     } catch (error) {
       console.error("Error:", error);
       toast({
@@ -168,37 +159,36 @@ const NewCallback = () => {
     <div className="min-h-screen bg-background p-4">
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="flex items-center gap-4">
-          <Button 
-            variant="outline" 
-            onClick={() => navigate("/dashboard")}
+          <Button
+            variant="outline"
+            onClick={() => navigate("/leads")}
             className="flex items-center gap-2"
           >
             <ArrowLeft className="h-4 w-4" />
             Back
           </Button>
           <div>
-            <h1 className="text-3xl font-bold">New Lawyer</h1>
-            <p className="text-muted-foreground mt-1">
-              Add a new lawyer manually
-            </p>
+            <h1 className="text-3xl font-bold">Add Law Firm</h1>
+            <p className="text-muted-foreground mt-1">Create a new law firm profile</p>
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Firm Details Card */}
+          {/* Law Firm Intake Card */}
           <Card>
             <CardHeader>
-              <CardTitle>Firm Details</CardTitle>
+              <CardTitle>Law Firm Intake</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="firmName">Firm Name</Label>
+                <div className="md:col-span-2">
+                  <Label htmlFor="firmName">Law Firm Name *</Label>
                   <Input
                     id="firmName"
                     value={firmName}
                     onChange={(e) => setFirmName(e.target.value)}
-                    placeholder="Enter firm name"
+                    placeholder="Enter law firm name"
+                    required
                   />
                 </div>
 
@@ -212,6 +202,27 @@ const NewCallback = () => {
                   />
                 </div>
 
+                <div>
+                  <Label htmlFor="firmEmail">Firm Email</Label>
+                  <Input
+                    id="firmEmail"
+                    type="email"
+                    value={firmEmail}
+                    onChange={(e) => setFirmEmail(e.target.value)}
+                    placeholder="firm@email.com"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="zipCode">ZIP Code</Label>
+                  <Input
+                    id="zipCode"
+                    value={zipCode}
+                    onChange={(e) => setZipCode(e.target.value)}
+                    placeholder="12345"
+                  />
+                </div>
+
                 <div className="md:col-span-2">
                   <Label htmlFor="firmAddress">Firm Address</Label>
                   <Input
@@ -219,59 +230,6 @@ const NewCallback = () => {
                     value={firmAddress}
                     onChange={(e) => setFirmAddress(e.target.value)}
                     placeholder="Enter firm address"
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Personal Information Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Personal Information</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="lawyerFullName">Lawyer Full Name *</Label>
-                  <Input
-                    id="lawyerFullName"
-                    value={lawyerFullName}
-                    onChange={(e) => setLawyerFullName(e.target.value)}
-                    placeholder="Enter full name"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="phoneNumber">Phone Number *</Label>
-                  <Input
-                    id="phoneNumber"
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                    placeholder="(555) 123-4567"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="lawyer@email.com"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="streetAddress">Street Address</Label>
-                  <Input
-                    id="streetAddress"
-                    value={streetAddress}
-                    onChange={(e) => setStreetAddress(e.target.value)}
-                    placeholder="123 Main St"
                   />
                 </div>
 
@@ -294,24 +252,14 @@ const NewCallback = () => {
                     placeholder="State"
                   />
                 </div>
-
-                <div>
-                  <Label htmlFor="zipCode">ZIP Code</Label>
-                  <Input
-                    id="zipCode"
-                    value={zipCode}
-                    onChange={(e) => setZipCode(e.target.value)}
-                    placeholder="12345"
-                  />
-                </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Pipeline & Source Tracking Card */}
+          {/* Pipeline Card */}
           <Card>
             <CardHeader>
-              <CardTitle>Pipeline & Source Tracking</CardTitle>
+              <CardTitle>Pipeline</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -411,25 +359,20 @@ const NewCallback = () => {
 
           {/* Action Buttons */}
           <div className="flex justify-end space-x-4">
-            <Button 
-              type="button" 
-              variant="outline" 
-              onClick={() => navigate("/leads")}
-            >
+            <Button type="button" variant="outline" onClick={() => navigate("/leads")}>
               Cancel
             </Button>
-            <Button 
-              type="submit" 
-              disabled={isSubmitting}
-              className="min-w-32"
-            >
+            <Button type="submit" disabled={isSubmitting} className="min-w-44">
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Creating...
                 </>
               ) : (
-                "Create Lead"
+                <>
+                  <Building2 className="mr-2 h-4 w-4" />
+                  Add Law Firm
+                </>
               )}
             </Button>
           </div>
@@ -439,4 +382,4 @@ const NewCallback = () => {
   );
 };
 
-export default NewCallback;
+export default NewLawFirm;

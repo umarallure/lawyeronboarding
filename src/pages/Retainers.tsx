@@ -6,12 +6,23 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Filter, Phone, User, ChevronDown, ChevronUp, Loader2, Trash2 } from 'lucide-react';
+import { Building2, Filter, Phone, User, ChevronDown, ChevronUp, Loader2, Trash2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useMarketingTeamFilterAccess } from '@/hooks/useMarketingTeamFilterAccess';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
+import {
+  addDays,
+  endOfMonth,
+  endOfWeek,
+  format,
+  parseISO,
+  startOfDay,
+  startOfMonth,
+  startOfWeek,
+  subMonths,
+  subWeeks,
+} from 'date-fns';
 import { usePipelineStages } from '@/hooks/usePipelineStages';
 import {
   AlertDialog,
@@ -44,6 +55,8 @@ interface LawyerLead {
   additional_notes: string | null;
   stage_id: string | null;
   assigned_user_id?: string | null;
+  entity_type?: string | null;
+  profile_type?: string | null;
 }
 
 type AssigneeUser = {
@@ -68,18 +81,23 @@ const Retainers = () => {
   const [leads, setLeads] = useState<LawyerLead[]>([]);
   const [filteredLeads, setFilteredLeads] = useState<LawyerLead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSearching, setIsSearching] = useState(false);
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
-  const [dateFilter, setDateFilter] = useState('');
-  const [vendorFilter, setVendorFilter] = useState('all');
-  const [vendorOptions, setVendorOptions] = useState<string[]>(['all']);
-  const [nameFilter, setNameFilter] = useState('');
+  const [dateRangeFilter, setDateRangeFilter] = useState<
+    'all_time' | 'this_week' | 'last_week' | 'this_month' | 'last_month' | 'custom'
+  >('all_time');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
+  const [lawyerSearch, setLawyerSearch] = useState('');
+  const [lawFirmSearch, setLawFirmSearch] = useState('');
   const [assigneeFilter, setAssigneeFilter] = useState<string>('all');
   const [assigneeById, setAssigneeById] = useState<Record<string, AssigneeUser>>({});
   const didInitAssigneeFilter = useRef(false);
-  const [searchDropdownOpen, setSearchDropdownOpen] = useState(false);
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const searchDropdownRef = useRef<HTMLDivElement>(null);
+  const [lawyerDropdownOpen, setLawyerDropdownOpen] = useState(false);
+  const [lawFirmDropdownOpen, setLawFirmDropdownOpen] = useState(false);
+  const lawyerSearchInputRef = useRef<HTMLInputElement>(null);
+  const lawFirmSearchInputRef = useRef<HTMLInputElement>(null);
+  const lawyerDropdownRef = useRef<HTMLDivElement>(null);
+  const lawFirmDropdownRef = useRef<HTMLDivElement>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const stageLabelById = useMemo(() => {
@@ -152,42 +170,23 @@ const Retainers = () => {
     [toast]
   );
 
-  const fetchVendors = useCallback(async () => {
-    try {
-      const supabaseLeads = supabase as unknown as {
-        from: (table: string) => {
-          select: (cols: string) => {
-            not: (col: string, op: string, val: unknown) => Promise<{
-              data: { firm_name: string | null }[] | null;
-              error: unknown;
-            }>;
-          };
-        };
-      };
+  const isFirmProfile = (lead: LawyerLead) => {
+    const profileType = (lead.profile_type || '').trim();
+    const entityType = (lead.entity_type || '').trim();
+    return profileType === 'law_firm' || entityType === 'firm';
+  };
 
-      const { data, error } = await supabaseLeads
-        .from('lawyer_leads')
-        .select('firm_name')
-        .not('firm_name', 'is', null);
+  const getLeadDisplayName = (lead: LawyerLead) => {
+    if (isFirmProfile(lead)) return (lead.firm_name || lead.lawyer_full_name || 'N/A').trim() || 'N/A';
 
-      if (error) throw error;
-
-      const vendors = new Set<string>();
-      const rows = (Array.isArray(data) ? data : []) as { firm_name: string | null }[];
-      rows.forEach((row) => {
-        const vendor = (row.firm_name || '').trim();
-        if (vendor) vendors.add(vendor);
-      });
-
-      setVendorOptions(['all', ...Array.from(vendors)]);
-    } catch (error) {
-      console.error('Error fetching vendors:', error);
-      // Keep existing options (all) on error to avoid blocking UI
-    }
-  }, []);
+    const name = (lead.lawyer_full_name || 'N/A').trim() || 'N/A';
+    const firm = (lead.firm_name || 'N/A').trim() || 'N/A';
+    return `${name} - ${firm}`;
+  };
 
   const applyFilters = useCallback(() => {
-    const searchLower = nameFilter.trim().toLowerCase();
+    const lawyerSearchLower = lawyerSearch.trim().toLowerCase();
+    const lawFirmSearchLower = lawFirmSearch.trim().toLowerCase();
 
     let filtered = leads;
 
@@ -195,29 +194,86 @@ const Retainers = () => {
       filtered = filtered.filter((lead) => (lead.assigned_user_id || '') === assigneeFilter);
     }
 
-    if (dateFilter) {
-      filtered = filtered.filter((lead) => lead.created_at?.startsWith(dateFilter));
+    const getDateBounds = (): { start: Date; endExclusive: Date } | null => {
+      const now = new Date();
+
+      if (dateRangeFilter === 'all_time') return null;
+
+      if (dateRangeFilter === 'custom') {
+        if (!customStartDate || !customEndDate) return null;
+        const start = startOfDay(parseISO(customStartDate));
+        let end = startOfDay(parseISO(customEndDate));
+        if (end < start) end = start;
+        return { start, endExclusive: addDays(end, 1) };
+      }
+
+      if (dateRangeFilter === 'this_week') {
+        const start = startOfWeek(now, { weekStartsOn: 1 });
+        const end = endOfWeek(now, { weekStartsOn: 1 });
+        return { start: startOfDay(start), endExclusive: addDays(startOfDay(end), 1) };
+      }
+
+      if (dateRangeFilter === 'last_week') {
+        const ref = subWeeks(now, 1);
+        const start = startOfWeek(ref, { weekStartsOn: 1 });
+        const end = endOfWeek(ref, { weekStartsOn: 1 });
+        return { start: startOfDay(start), endExclusive: addDays(startOfDay(end), 1) };
+      }
+
+      if (dateRangeFilter === 'this_month') {
+        const start = startOfMonth(now);
+        const end = endOfMonth(now);
+        return { start: startOfDay(start), endExclusive: addDays(startOfDay(end), 1) };
+      }
+
+      const ref = subMonths(now, 1);
+      const start = startOfMonth(ref);
+      const end = endOfMonth(ref);
+      return { start: startOfDay(start), endExclusive: addDays(startOfDay(end), 1) };
+    };
+
+    const bounds = getDateBounds();
+    if (bounds) {
+      filtered = filtered.filter((lead) => {
+        if (!lead.created_at) return false;
+        const createdAt = new Date(lead.created_at);
+        return createdAt >= bounds.start && createdAt < bounds.endExclusive;
+      });
     }
 
-    if (vendorFilter !== 'all') {
-      const targetVendor = vendorFilter.toLowerCase();
-      filtered = filtered.filter((lead) => (lead.firm_name || '').toLowerCase() === targetVendor);
+    if (lawyerSearchLower) {
+      filtered = filtered.filter((lead) => {
+        if (isFirmProfile(lead)) return false;
+        return (
+          (lead.lawyer_full_name || '').toLowerCase().includes(lawyerSearchLower) ||
+          (lead.phone_number || '').toLowerCase().includes(lawyerSearchLower) ||
+          (lead.submission_id || '').toLowerCase().includes(lawyerSearchLower) ||
+          (lead.email || '').toLowerCase().includes(lawyerSearchLower) ||
+          (lead.firm_name || '').toLowerCase().includes(lawyerSearchLower)
+        );
+      });
     }
 
-    if (searchLower) {
+    if (lawFirmSearchLower) {
       filtered = filtered.filter((lead) => {
         return (
-          (lead.lawyer_full_name || '').toLowerCase().includes(searchLower) ||
-          (lead.phone_number || '').toLowerCase().includes(searchLower) ||
-          (lead.submission_id || '').toLowerCase().includes(searchLower) ||
-          (lead.email || '').toLowerCase().includes(searchLower) ||
-          (lead.firm_name || '').toLowerCase().includes(searchLower)
+          (lead.firm_name || '').toLowerCase().includes(lawFirmSearchLower) ||
+          (isFirmProfile(lead) &&
+            (lead.lawyer_full_name || '').toLowerCase().includes(lawFirmSearchLower))
         );
       });
     }
 
     setFilteredLeads(filtered);
-  }, [dateFilter, vendorFilter, nameFilter, leads, assigneeFilter]);
+  }, [
+    assigneeFilter,
+    customEndDate,
+    customStartDate,
+    dateRangeFilter,
+    leads,
+    lawFirmSearch,
+    lawyerSearch,
+  ]);
 
   useEffect(() => {
     applyFilters();
@@ -288,9 +344,8 @@ const Retainers = () => {
   useEffect(() => {
     if (user) {
       fetchLeads();
-      fetchVendors();
     }
-  }, [user, fetchLeads, fetchVendors]);
+  }, [user, fetchLeads]);
 
   useEffect(() => {
     const loadAssignees = async () => {
@@ -330,16 +385,6 @@ const Retainers = () => {
 
     void loadAssignees();
   }, [leads]);
-
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      setIsSearching(true);
-      fetchLeads(nameFilter.trim() || undefined).finally(() => setIsSearching(false));
-      setCurrentPage(1); 
-    }, 500);
-
-    return () => clearTimeout(timeoutId);
-  }, [nameFilter, fetchLeads]);
 
   const toggleExpand = (id: string) => {
     setExpandedCards(prev => ({ ...prev, [id]: !prev[id] }));
@@ -422,72 +467,83 @@ const Retainers = () => {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="date-filter">Date</Label>
-                <Input
-                  id="date-filter"
-                  type="date"
-                  value={dateFilter}
-                  onChange={(e) => setDateFilter(e.target.value)}
-                />
+                <div className="space-y-2">
+                  <Select value={dateRangeFilter} onValueChange={(v) => setDateRangeFilter(v as typeof dateRangeFilter)}>
+                    <SelectTrigger id="date-filter">
+                      <SelectValue placeholder="All time" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all_time">All Time</SelectItem>
+                      <SelectItem value="this_week">This Week</SelectItem>
+                      <SelectItem value="last_week">Last Week</SelectItem>
+                      <SelectItem value="this_month">This Month</SelectItem>
+                      <SelectItem value="last_month">Last Month</SelectItem>
+                      <SelectItem value="custom">Custom</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {dateRangeFilter === 'custom' && (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="date"
+                        value={customStartDate}
+                        max={customEndDate || undefined}
+                        onChange={(e) => setCustomStartDate(e.target.value)}
+                      />
+                      <Input
+                        type="date"
+                        value={customEndDate}
+                        min={customStartDate || undefined}
+                        onChange={(e) => setCustomEndDate(e.target.value)}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="vendor-filter">Firm</Label>
-                <Select value={vendorFilter} onValueChange={setVendorFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="All firms" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {vendorOptions.map((vendor) => (
-                      <SelectItem key={vendor} value={vendor}>
-                        {vendor === 'all' ? 'All Firms' : vendor}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="name-filter">Search Lawyers</Label>
-                <div className="relative" ref={searchDropdownRef}>
+                <Label htmlFor="lawyer-search">Search Lawyer</Label>
+                <div className="relative" ref={lawyerDropdownRef}>
                   <Input
-                    id="name-filter"
-                    ref={searchInputRef}
+                    id="lawyer-search"
+                    ref={lawyerSearchInputRef}
                     type="text"
-                    placeholder="Search by name, phone, submission ID, or email..."
-                    value={nameFilter}
+                    placeholder="Search by name, phone, email, or firm..."
+                    value={lawyerSearch}
                     onChange={(e) => {
-                      setNameFilter(e.target.value);
-                      setSearchDropdownOpen(true);
+                      setLawyerSearch(e.target.value);
+                      setLawyerDropdownOpen(true);
                     }}
-                    onFocus={() => setSearchDropdownOpen(true)}
+                    onFocus={() => setLawyerDropdownOpen(true)}
                     onBlur={() => {
-                      setTimeout(() => setSearchDropdownOpen(false), 200);
+                      setTimeout(() => setLawyerDropdownOpen(false), 200);
                     }}
                     className="pr-10"
                   />
                   <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    {isSearching ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                    ) : nameFilter ? (
+                    {lawyerSearch ? (
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => { setNameFilter(''); setSearchDropdownOpen(false); }}
+                        onClick={() => { setLawyerSearch(''); setLawyerDropdownOpen(false); }}
                         className="h-6 w-6 p-0 hover:bg-transparent"
                       >
                         <span className="text-muted-foreground hover:text-foreground">✕</span>
                       </Button>
                     ) : null}
                   </div>
-                  {searchDropdownOpen && (() => {
-                    const query = nameFilter.trim().toLowerCase();
-                    const suggestions = query
-                      ? leads.filter((lead) =>
+                  {lawyerDropdownOpen && (() => {
+                    const query = lawyerSearch.trim().toLowerCase();
+                    const suggestions = (query ? leads : leads)
+                      .filter((lead) => !isFirmProfile(lead))
+                      .filter((lead) => {
+                        if (!query) return true;
+                        return (
                           (lead.lawyer_full_name || '').toLowerCase().includes(query) ||
                           (lead.phone_number || '').toLowerCase().includes(query) ||
                           (lead.email || '').toLowerCase().includes(query) ||
-                          (lead.firm_name || '').toLowerCase().includes(query) ||
-                          (lead.submission_id || '').toLowerCase().includes(query)
-                        )
-                      : leads;
+                          (lead.firm_name || '').toLowerCase().includes(query)
+                        );
+                      });
                     const displayItems = suggestions.slice(0, 50);
                     if (displayItems.length === 0) return null;
                     return (
@@ -499,14 +555,90 @@ const Retainers = () => {
                             className="w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground flex items-center justify-between gap-2"
                             onMouseDown={(e) => e.preventDefault()}
                             onClick={() => {
-                              setNameFilter(lead.lawyer_full_name || lead.phone_number || '');
-                              setSearchDropdownOpen(false);
+                              setLawyerSearch((lead.lawyer_full_name || '').trim());
+                              setLawyerDropdownOpen(false);
                             }}
                           >
-                            <span className="truncate font-medium">{lead.lawyer_full_name || 'N/A'}</span>
+                            <span className="truncate font-medium">{(lead.lawyer_full_name || 'N/A').trim() || 'N/A'}</span>
                             <span className="text-xs text-muted-foreground shrink-0">{lead.firm_name || ''}</span>
                           </button>
                         ))}
+                        {suggestions.length > 50 && (
+                          <div className="px-2 py-1.5 text-xs text-muted-foreground text-center">
+                            {suggestions.length - 50} more results...
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="law-firm-search">Search Law Firm</Label>
+                <div className="relative" ref={lawFirmDropdownRef}>
+                  <Input
+                    id="law-firm-search"
+                    ref={lawFirmSearchInputRef}
+                    type="text"
+                    placeholder="Search law firms..."
+                    value={lawFirmSearch}
+                    onChange={(e) => {
+                      setLawFirmSearch(e.target.value);
+                      setLawFirmDropdownOpen(true);
+                    }}
+                    onFocus={() => setLawFirmDropdownOpen(true)}
+                    onBlur={() => {
+                      setTimeout(() => setLawFirmDropdownOpen(false), 200);
+                    }}
+                    className="pr-10"
+                  />
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    {lawFirmSearch ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => { setLawFirmSearch(''); setLawFirmDropdownOpen(false); }}
+                        className="h-6 w-6 p-0 hover:bg-transparent"
+                      >
+                        <span className="text-muted-foreground hover:text-foreground">✕</span>
+                      </Button>
+                    ) : null}
+                  </div>
+                  {lawFirmDropdownOpen && (() => {
+                    const query = lawFirmSearch.trim().toLowerCase();
+                    const suggestions = (query ? leads : leads)
+                      .filter((lead) => isFirmProfile(lead))
+                      .filter((lead) => {
+                        const firmName = (lead.firm_name || lead.lawyer_full_name || '').toLowerCase();
+                        if (!query) return true;
+                        return (
+                          firmName.includes(query) ||
+                          (lead.firm_phone_no || '').toLowerCase().includes(query) ||
+                          (lead.email || '').toLowerCase().includes(query)
+                        );
+                      });
+                    const displayItems = suggestions.slice(0, 50);
+                    if (displayItems.length === 0) return null;
+                    return (
+                      <div className="absolute z-50 mt-1 max-h-64 w-full overflow-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
+                        {displayItems.map((lead) => {
+                          const firmName = (lead.firm_name || lead.lawyer_full_name || 'N/A').trim() || 'N/A';
+                          return (
+                            <button
+                              key={lead.id}
+                              type="button"
+                              className="w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                setLawFirmSearch(firmName);
+                                setLawFirmDropdownOpen(false);
+                              }}
+                            >
+                              <span className="truncate font-medium">{firmName}</span>
+                            </button>
+                          );
+                        })}
                         {suggestions.length > 50 && (
                           <div className="px-2 py-1.5 text-xs text-muted-foreground text-center">
                             {suggestions.length - 50} more results...
@@ -525,7 +657,7 @@ const Retainers = () => {
                     <SelectValue placeholder="All" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="all">All Leads</SelectItem>
                     {user?.id ? <SelectItem value={user.id}>My Leads</SelectItem> : null}
                     {marketingTeam
                       .filter((m) => m.user_id !== user?.id)
@@ -549,13 +681,23 @@ const Retainers = () => {
                 <h3 className="font-semibold">Quick Actions</h3>
                 <p className="text-sm text-muted-foreground">Create new leads or manage existing entries</p>
               </div>
-              <Button 
-                onClick={() => navigate('/add-lead')}
-                className="flex items-center space-x-2"
-              >
-                <Phone className="h-4 w-4" />
-                <span>New Lawyer</span>
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => navigate('/add-law-firm')}
+                  className="flex items-center space-x-2"
+                >
+                  <Building2 className="h-4 w-4" />
+                  <span>Add Law Firm</span>
+                </Button>
+                <Button
+                  onClick={() => navigate('/add-lead')}
+                  className="flex items-center space-x-2"
+                >
+                  <Phone className="h-4 w-4" />
+                  <span>New Lawyer</span>
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -596,7 +738,7 @@ const Retainers = () => {
                               <div
                                 className="text-lg font-semibold group-hover:underline text-left"
                               >
-                                {(lead.lawyer_full_name || 'N/A') + ' - ' + (lead.firm_name || 'N/A')}
+                                {getLeadDisplayName(lead)}
                               </div>
                               <Badge className={`${getStatusColor(getLeadStatus(lead))} pointer-events-none`}>
                                 {getLeadStatus(lead)}

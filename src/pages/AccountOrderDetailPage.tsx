@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, BriefcaseBusiness, Clock3, MapPinned, Phone, RefreshCw, UserRound } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -8,13 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 type OrderStatus = "OPEN" | "FULFILLED" | "EXPIRED";
 
@@ -34,6 +34,16 @@ type OrderRow = {
 
 type AttorneyProfileRow = Record<string, unknown> & {
   user_id?: string | null;
+};
+
+type AssignedLeadRow = {
+  id: string;
+  submission_id: string | null;
+  insured_name: string | null;
+  client_phone_number: string | null;
+  state: string | null;
+  status: string | null;
+  created_at: string | null;
 };
 
 const clampPercent = (n: number) => Math.max(0, Math.min(100, n));
@@ -150,6 +160,110 @@ const AccountOrderDetailPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [order, setOrder] = useState<OrderRow | null>(null);
   const [attorneyProfile, setAttorneyProfile] = useState<AttorneyProfileRow | null>(null);
+  const [assignedLeads, setAssignedLeads] = useState<AssignedLeadRow[]>([]);
+  const [assignedLeadsError, setAssignedLeadsError] = useState<string | null>(null);
+  const [assignedLeadsLoading, setAssignedLeadsLoading] = useState(false);
+
+  const loadAssignedLeads = useCallback(async (activeOrderId: string) => {
+    setAssignedLeadsLoading(true);
+    setAssignedLeadsError(null);
+
+    const leadsClient = supabase as unknown as {
+      from: (table: string) => {
+        select: (cols: string) => {
+          eq: (column: string, value: string) => {
+            order: (
+              column: string,
+              opts: { ascending: boolean }
+            ) => Promise<{ data: AssignedLeadRow[] | null; error: { message?: string } | null }>;
+          };
+          in: (column: string, values: string[]) => {
+            order: (
+              column: string,
+              opts: { ascending: boolean }
+            ) => Promise<{ data: AssignedLeadRow[] | null; error: { message?: string } | null }>;
+          };
+        };
+      };
+    };
+
+    const tryDailyDealFlowByColumn = async (column: string) => {
+      const { data, error } = await leadsClient
+        .from("daily_deal_flow")
+        .select("id,submission_id,insured_name,client_phone_number,state,status,created_at")
+        .eq(column, activeOrderId)
+        .order("created_at", { ascending: false });
+
+      if (error) return { ok: false as const, error: error.message || "Failed to load assigned leads" };
+      return { ok: true as const, leads: (data ?? []) as AssignedLeadRow[] };
+    };
+
+    const tryAssignmentTable = async (table: string) => {
+      const assignmentsClient = supabase as unknown as {
+        from: (table: string) => {
+          select: (cols: string) => {
+            eq: (column: string, value: string) => {
+              order: (
+                column: string,
+                opts: { ascending: boolean }
+              ) => Promise<{ data: Array<{ submission_id: string | null }> | null; error: { message?: string } | null }>;
+            };
+          };
+        };
+      };
+
+      const { data: assignments, error: assignmentsError } = await assignmentsClient
+        .from(table)
+        .select("submission_id")
+        .eq("order_id", activeOrderId)
+        .order("created_at", { ascending: false });
+
+      if (assignmentsError) return { ok: false as const, error: assignmentsError.message || "Failed to load assignments" };
+
+      const submissionIds = (assignments ?? [])
+        .map((r) => (r?.submission_id ? String(r.submission_id) : ""))
+        .filter(Boolean);
+
+      if (submissionIds.length === 0) return { ok: true as const, leads: [] as AssignedLeadRow[] };
+
+      const { data: dealRows, error: dealsError } = await leadsClient
+        .from("daily_deal_flow")
+        .select("id,submission_id,insured_name,client_phone_number,state,status,created_at")
+        .in("submission_id", submissionIds)
+        .order("created_at", { ascending: false });
+
+      if (dealsError) return { ok: false as const, error: dealsError.message || "Failed to load deals" };
+      return { ok: true as const, leads: (dealRows ?? []) as AssignedLeadRow[] };
+    };
+
+    try {
+      const columnCandidates = ["order_id", "assigned_order_id", "fulfillment_order_id"];
+      for (const column of columnCandidates) {
+        const res = await tryDailyDealFlowByColumn(column);
+        if (res.ok) {
+          setAssignedLeads(res.leads);
+          return;
+        }
+      }
+
+      const tableCandidates = ["order_lead_assignments", "order_assignments", "order_leads"];
+      for (const table of tableCandidates) {
+        const res = await tryAssignmentTable(table);
+        if (res.ok) {
+          setAssignedLeads(res.leads);
+          return;
+        }
+      }
+
+      setAssignedLeads([]);
+      setAssignedLeadsError("Unable to load assigned leads for this order.");
+    } catch (e) {
+      setAssignedLeads([]);
+      setAssignedLeadsError(e instanceof Error ? e.message : "Unable to load assigned leads for this order.");
+    } finally {
+      setAssignedLeadsLoading(false);
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     if (!orderId) return;
@@ -178,6 +292,7 @@ const AccountOrderDetailPage = () => {
       if (!orderRow) throw new Error("Order not found");
 
       setOrder(orderRow);
+      void loadAssignedLeads(orderId);
 
       const profilesClient = supabase as unknown as {
         from: (table: string) => {
@@ -201,11 +316,13 @@ const AccountOrderDetailPage = () => {
     } catch (err) {
       setOrder(null);
       setAttorneyProfile(null);
+      setAssignedLeads([]);
+      setAssignedLeadsError(null);
       setError(err instanceof Error ? err.message : "Something went wrong while loading the order.");
     } finally {
       setLoading(false);
     }
-  }, [orderId]);
+  }, [loadAssignedLeads, orderId]);
 
   useEffect(() => {
     void refresh();
@@ -232,40 +349,35 @@ const AccountOrderDetailPage = () => {
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="space-y-3">
-          <Breadcrumb>
-            <BreadcrumbList>
-              <BreadcrumbItem>
-                <BreadcrumbLink asChild>
-                  <Link to="/account-management/orders">Account Management</Link>
-                </BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
-                <BreadcrumbPage>Order Detail</BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-3 min-w-0">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => navigate("/account-management/orders")}
+            aria-label="Back to orders"
+            className="shrink-0"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
 
-          <div className="space-y-1">
-            <h2 className="text-2xl font-semibold tracking-tight">
-              {order ? getCaseTypeLabel(order.case_type) : "Order Detail"}
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Review the lawyer account, targeting, criteria, and fulfillment health for this order.
-            </p>
+          <div className="min-w-0 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-xl font-semibold tracking-tight">Order Detail</h2>
+              {order ? <Badge className={getStatusBadgeClass(order.status)}>{order.status}</Badge> : null}
+            </div>
+            <div className="text-sm text-muted-foreground truncate">
+              {order
+                ? `${getCaseTypeLabel(order.case_type)} • ${order.target_states.length} state${order.target_states.length === 1 ? "" : "s"} • ${order.quota_filled}/${order.quota_total} filled • Expires ${formatDate(order.expires_at)}`
+                : "Review targeting, criteria, and fulfillment for this order."}
+            </div>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => void refresh()} disabled={loading}>
             <RefreshCw className={loading ? "mr-2 h-4 w-4 animate-spin" : "mr-2 h-4 w-4"} />
             Refresh
-          </Button>
-          <Button variant="outline" onClick={() => navigate("/account-management/orders")}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Orders
           </Button>
         </div>
       </div>
@@ -323,55 +435,117 @@ const AccountOrderDetailPage = () => {
           </div>
 
           <div className="grid gap-4 xl:grid-cols-[1.2fr,0.8fr]">
-            <Card>
-              <CardHeader>
-                <CardTitle>Order Overview</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-1">
-                    <div className="text-sm font-medium text-muted-foreground">Case Type</div>
-                    <div className="text-base font-medium">{getCaseTypeLabel(order.case_type)}</div>
-                  </div>
+            <div className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Order Overview</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <div className="text-sm font-medium text-muted-foreground">Case Type</div>
+                      <div className="text-base font-medium">{getCaseTypeLabel(order.case_type)}</div>
+                    </div>
 
-                  <div className="space-y-1">
-                    <div className="text-sm font-medium text-muted-foreground">Case Subtype</div>
-                    <div className="text-base font-medium">{order.case_subtype ? startCase(order.case_subtype) : "No subtype"}</div>
-                  </div>
+                    <div className="space-y-1">
+                      <div className="text-sm font-medium text-muted-foreground">Case Subtype</div>
+                      <div className="text-base font-medium">{order.case_subtype ? startCase(order.case_subtype) : "No subtype"}</div>
+                    </div>
 
-                  <div className="space-y-1">
-                    <div className="text-sm font-medium text-muted-foreground">Created</div>
-                    <div className="text-base font-medium">{formatDate(order.created_at)}</div>
-                  </div>
+                    <div className="space-y-1">
+                      <div className="text-sm font-medium text-muted-foreground">Created</div>
+                      <div className="text-base font-medium">{formatDate(order.created_at)}</div>
+                    </div>
 
-                  <div className="space-y-1">
-                    <div className="text-sm font-medium text-muted-foreground">Target States</div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {order.target_states.map((state) => (
-                        <Badge key={state} variant="outline">
-                          {String(state).toUpperCase()}
-                        </Badge>
-                      ))}
+                    <div className="space-y-1">
+                      <div className="text-sm font-medium text-muted-foreground">Target States</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {order.target_states.map((state) => (
+                          <Badge key={state} variant="outline">
+                            {String(state).toUpperCase()}
+                          </Badge>
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="space-y-3">
-                  <div className="text-sm font-medium text-muted-foreground">Criteria</div>
-                  {criteriaSummary.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {criteriaSummary.map((item) => (
-                        <Badge key={item} variant="outline" className="py-1">
-                          {item}
-                        </Badge>
-                      ))}
-                    </div>
+                  <div className="space-y-3">
+                    <div className="text-sm font-medium text-muted-foreground">Criteria</div>
+                    {criteriaSummary.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {criteriaSummary.map((item) => (
+                          <Badge key={item} variant="outline" className="py-1">
+                            {item}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground">No criteria configured.</div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                  <CardTitle>Assigned Leads</CardTitle>
+                  <Badge variant="secondary">{assignedLeads.length}</Badge>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {assignedLeadsLoading ? (
+                    <div className="text-sm text-muted-foreground">Loading assigned leads…</div>
+                  ) : assignedLeadsError ? (
+                    <div className="text-sm text-muted-foreground">{assignedLeadsError}</div>
+                  ) : assignedLeads.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">No leads have been assigned to this order yet.</div>
                   ) : (
-                    <div className="text-sm text-muted-foreground">No criteria configured.</div>
+                    <div className="overflow-x-auto rounded-lg border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="min-w-[220px]">Client</TableHead>
+                            <TableHead className="min-w-[160px]">Phone</TableHead>
+                            <TableHead className="min-w-[110px]">State</TableHead>
+                            <TableHead className="min-w-[160px]">Status</TableHead>
+                            <TableHead className="min-w-[140px]">Assigned</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {assignedLeads.map((lead) => (
+                            <TableRow key={lead.id}>
+                              <TableCell className="font-medium">
+                                <div className="space-y-1">
+                                  <div>{(lead.insured_name || "").trim() || "Unknown"}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {lead.submission_id ? `Submission: ${lead.submission_id}` : "No submission id"}
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {(lead.client_phone_number || "").trim() || "-"}
+                              </TableCell>
+                              <TableCell>
+                                {lead.state ? (
+                                  <Badge variant="outline">{String(lead.state).toUpperCase()}</Badge>
+                                ) : (
+                                  <span className="text-sm text-muted-foreground">-</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {(lead.status || "").trim() || "-"}
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {lead.created_at ? formatDate(lead.created_at) : "-"}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
                   )}
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
 
             <Card>
               <CardHeader>

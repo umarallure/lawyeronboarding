@@ -1,6 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, BriefcaseBusiness, Clock3, Package, RefreshCw, Search, Users, Pencil, Trash2, MoreHorizontal, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { AlertCircle, BriefcaseBusiness, Package, RefreshCw, Search, Users, Pencil, Trash2, MoreHorizontal, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import {
+  addDays,
+  endOfMonth,
+  endOfWeek,
+  parseISO,
+  startOfDay,
+  startOfMonth,
+  startOfWeek,
+  subMonths,
+  subWeeks,
+} from "date-fns";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
@@ -71,6 +82,17 @@ const STATUS_OPTIONS: Array<{ label: string; value: StatusFilter }> = [
   { label: "Expired", value: "EXPIRED" },
 ];
 
+type DateFilter = "all_time" | "this_week" | "last_week" | "this_month" | "last_month" | "custom";
+
+const DATE_FILTER_OPTIONS: Array<{ label: string; value: DateFilter }> = [
+  { label: "All Time", value: "all_time" },
+  { label: "This Week", value: "this_week" },
+  { label: "Last Week", value: "last_week" },
+  { label: "This Month", value: "this_month" },
+  { label: "Last Month", value: "last_month" },
+  { label: "Custom", value: "custom" },
+];
+
 const formatDate = (value: string) => {
   try {
     return new Intl.DateTimeFormat("en-US", {
@@ -133,6 +155,19 @@ const roundPercent = (n: number) => Math.round(n);
 
 const getRemainingDemand = (order: OrderRow) => Math.max(0, (Number(order.quota_total) || 0) - (Number(order.quota_filled) || 0));
 
+const isTestOrder = (order: OrderRow, attorney: AttorneyProfileRow | undefined) => {
+  const name = (attorney?.full_name || "").trim().toLowerCase();
+  const email = (attorney?.primary_email || "").trim().toLowerCase();
+  const criteriaText = JSON.stringify(order.criteria ?? {}).toLowerCase();
+
+  if (email.includes("test@") || email.includes("+test") || email.includes("@example.com")) return true;
+  if (email === "test@accidentpayments.com") return true;
+  if (name.startsWith("test") || name.includes(" test ")) return true;
+  if (criteriaText.includes("test")) return true;
+
+  return false;
+};
+
 const getStatusBadgeClass = (status: OrderStatus) => {
   switch (status) {
     case "OPEN":
@@ -185,6 +220,7 @@ const AccountOrderManagementPage = () => {
   const [selectedStatus, setSelectedStatus] = useState<StatusFilter>("all");
   const [selectedCaseType, setSelectedCaseType] = useState<string>("all");
   const [selectedLawyer, setSelectedLawyer] = useState<string>("all");
+  const [dateFilter, setDateFilter] = useState<DateFilter>("all_time");
   const [dateRange, setDateRange] = useState<{ start: string; end: string }>({ start: "", end: "" });
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -217,10 +253,9 @@ const AccountOrderManagementPage = () => {
       }
 
       const safeOrders = (orderRows ?? []) as OrderRow[];
-      setOrders(safeOrders);
-
       const lawyerIds = Array.from(new Set(safeOrders.map((order) => order.lawyer_id).filter(Boolean)));
       if (lawyerIds.length === 0) {
+        setOrders([]);
         setAttorneyById({});
         return;
       }
@@ -249,7 +284,16 @@ const AccountOrderManagementPage = () => {
       for (const row of attorneyRows ?? []) {
         nextAttorneyById[row.user_id] = row;
       }
-      setAttorneyById(nextAttorneyById);
+
+      const nonTestOrders = safeOrders.filter((order) => !isTestOrder(order, nextAttorneyById[order.lawyer_id]));
+      const nonTestLawyerIds = new Set(nonTestOrders.map((order) => order.lawyer_id).filter(Boolean));
+      const filteredAttorneyById: Record<string, AttorneyProfileRow> = {};
+      Object.entries(nextAttorneyById).forEach(([id, attorney]) => {
+        if (nonTestLawyerIds.has(id)) filteredAttorneyById[id] = attorney;
+      });
+
+      setOrders(nonTestOrders);
+      setAttorneyById(filteredAttorneyById);
     } catch (err) {
       setOrders([]);
       setAttorneyById({});
@@ -284,15 +328,44 @@ const AccountOrderManagementPage = () => {
       if (selectedCaseType !== "all" && normalizeCaseType(order.case_type) !== selectedCaseType) return false;
       if (selectedLawyer !== "all" && order.lawyer_id !== selectedLawyer) return false;
       
-      if (dateRange.start) {
-        const orderDate = new Date(order.created_at);
-        const startDate = new Date(dateRange.start);
-        if (orderDate < startDate) return false;
+      const now = new Date();
+      let start: Date | null = null;
+      let endExclusive: Date | null = null;
+
+      if (dateFilter === "custom") {
+        if (dateRange.start && dateRange.end) {
+          start = startOfDay(parseISO(dateRange.start));
+          let end = startOfDay(parseISO(dateRange.end));
+          if (end < start) end = start;
+          endExclusive = addDays(end, 1);
+        }
+      } else if (dateFilter === "this_week") {
+        const s = startOfWeek(now, { weekStartsOn: 1 });
+        const e = endOfWeek(now, { weekStartsOn: 1 });
+        start = startOfDay(s);
+        endExclusive = addDays(startOfDay(e), 1);
+      } else if (dateFilter === "last_week") {
+        const ref = subWeeks(now, 1);
+        const s = startOfWeek(ref, { weekStartsOn: 1 });
+        const e = endOfWeek(ref, { weekStartsOn: 1 });
+        start = startOfDay(s);
+        endExclusive = addDays(startOfDay(e), 1);
+      } else if (dateFilter === "this_month") {
+        const s = startOfMonth(now);
+        const e = endOfMonth(now);
+        start = startOfDay(s);
+        endExclusive = addDays(startOfDay(e), 1);
+      } else if (dateFilter === "last_month") {
+        const ref = subMonths(now, 1);
+        const s = startOfMonth(ref);
+        const e = endOfMonth(ref);
+        start = startOfDay(s);
+        endExclusive = addDays(startOfDay(e), 1);
       }
-      if (dateRange.end) {
+
+      if (start && endExclusive) {
         const orderDate = new Date(order.created_at);
-        const endDate = new Date(dateRange.end);
-        if (orderDate > endDate) return false;
+        if (orderDate < start || orderDate >= endExclusive) return false;
       }
 
       if (!normalizedQuery) return true;
@@ -316,7 +389,7 @@ const AccountOrderManagementPage = () => {
 
       return haystack.includes(normalizedQuery);
     });
-  }, [attorneyById, orders, query, selectedCaseType, selectedStatus, selectedLawyer, dateRange]);
+  }, [attorneyById, orders, query, selectedCaseType, selectedStatus, selectedLawyer, dateFilter, dateRange]);
 
   const totalPages = useMemo(() => {
     return Math.ceil(filteredOrders.length / pageSize) || 1;
@@ -324,17 +397,12 @@ const AccountOrderManagementPage = () => {
 
   const stats = useMemo(() => {
     const openOrders = orders.filter((order) => order.status === "OPEN");
-    const expiringSoon = openOrders.filter((order) => {
-      const daysUntil = getDaysUntil(order.expires_at);
-      return daysUntil >= 0 && daysUntil <= 7;
-    }).length;
 
     return {
       total: orders.length,
       open: openOrders.length,
       lawyerAccounts: new Set(orders.map((order) => order.lawyer_id)).size,
       remainingDemand: openOrders.reduce((sum, order) => sum + getRemainingDemand(order), 0),
-      expiringSoon,
     };
   }, [orders]);
 
@@ -369,32 +437,7 @@ const AccountOrderManagementPage = () => {
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div className="space-y-3">
-          <Badge variant="outline" className="w-fit">
-            Account Management
-          </Badge>
-          <div className="space-y-1">
-            <h2 className="text-2xl font-semibold tracking-tight">Order Management</h2>
-            <p className="max-w-3xl text-sm text-muted-foreground">
-              Review every order in one place, see which lawyer account owns it, monitor fulfillment health,
-              and catch expiring demand before it slips.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <Badge variant="secondary" className="px-3 py-1">
-            {filteredOrders.length} visible orders
-          </Badge>
-          <Button variant="outline" onClick={() => void refresh()} disabled={loading}>
-            <RefreshCw className={loading ? "mr-2 h-4 w-4 animate-spin" : "mr-2 h-4 w-4"} />
-            Refresh
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Orders</CardTitle>
@@ -432,16 +475,6 @@ const AccountOrderManagementPage = () => {
           <CardContent className="flex items-center justify-between">
             <div className="text-2xl font-semibold">{stats.remainingDemand}</div>
             <BriefcaseBusiness className="h-8 w-8 text-primary" />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Expiring In 7 Days</CardTitle>
-          </CardHeader>
-          <CardContent className="flex items-center justify-between">
-            <div className="text-2xl font-semibold">{stats.expiringSoon}</div>
-            <Clock3 className="h-8 w-8 text-amber-600" />
           </CardContent>
         </Card>
       </div>
@@ -507,26 +540,62 @@ const AccountOrderManagementPage = () => {
                 </Select>
               </div>
 
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="date"
-                  value={dateRange.start}
-                  onChange={(e) => { setDateRange(prev => ({ ...prev, start: e.target.value })); setCurrentPage(1); }}
-                  className="w-[140px]"
-                  placeholder="Start date"
-                />
-                <span className="text-muted-foreground">-</span>
-                <Input
-                  type="date"
-                  value={dateRange.end}
-                  onChange={(e) => { setDateRange(prev => ({ ...prev, end: e.target.value })); setCurrentPage(1); }}
-                  className="w-[140px]"
-                  placeholder="End date"
-                />
+              <div className="w-full md:w-52">
+                <Select
+                  value={dateFilter}
+                  onValueChange={(value) => {
+                    setDateFilter(value as DateFilter);
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Date" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DATE_FILTER_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            </div>
-          </div>
+
+              {dateFilter === "custom" ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="date"
+                    value={dateRange.start}
+                    onChange={(e) => {
+                      setDateRange((prev) => ({ ...prev, start: e.target.value }));
+                      setCurrentPage(1);
+                    }}
+                    className="h-10 w-[160px] pr-8"
+                    placeholder="Start date"
+                  />
+                  <span className="text-muted-foreground">-</span>
+                  <Input
+                    type="date"
+                    value={dateRange.end}
+                    onChange={(e) => {
+                      setDateRange((prev) => ({ ...prev, end: e.target.value }));
+                      setCurrentPage(1);
+                    }}
+                    className="h-10 w-[160px] pr-8"
+                    placeholder="End date"
+                  />
+                </div>
+              ) : null}
+	            </div>
+
+	            <div className="flex flex-wrap items-center gap-3 justify-end">
+	              <Button variant="outline" onClick={() => void refresh()} disabled={loading}>
+	                <RefreshCw className={loading ? "mr-2 h-4 w-4 animate-spin" : "mr-2 h-4 w-4"} />
+	                Refresh
+	              </Button>
+	            </div>
+	          </div>
 
           {error ? (
             <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
@@ -566,6 +635,8 @@ const AccountOrderManagementPage = () => {
                   return (
                     <TableRow
                       key={order.id}
+                      className="cursor-pointer hover:bg-muted/30"
+                      onClick={() => navigate(`/account-management/orders/${order.id}`)}
                     >
                       <TableCell className="align-top">
                         <div className="space-y-1">
@@ -626,7 +697,7 @@ const AccountOrderManagementPage = () => {
                         </div>
                       </TableCell>
 
-                      <TableCell className="align-top">
+                      <TableCell className="align-top" onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon">

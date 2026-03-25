@@ -17,6 +17,7 @@ import CommissionPortal from "./pages/CommissionPortal";
 import CallResultUpdate from "./pages/CallResultUpdate";
 import CallResultJourney from "./pages/CallResultJourney";
 import NewCallback from "./pages/NewCallback";
+import NewLawFirm from "./pages/NewLawFirm";
 import DailyDealFlowPage from "./pages/DailyDealFlow/DailyDealFlowPage";
 import LawyerLeadDetailsPage from "@/pages/LawyerLeadDetailsPage";
 import LeadDetailsPage from "./pages/LeadDetails/LeadDetailsPage";
@@ -43,6 +44,8 @@ import AccountOrderManagementPage from "./pages/AccountOrderManagementPage";
 import QuickActionsPage from "./pages/QuickActionsPage";
 import OnboardingManagementPage from "./pages/OnboardingManagementPage";
 import AccountOrderDetailPage from "./pages/AccountOrderDetailPage";
+import AccountLawyerProfilesPage from "./pages/AccountLawyerProfilesPage";
+import AccountLawyerProfileDetailPage from "./pages/AccountLawyerProfileDetailPage";
 import AppShell from "@/components/layout/AppShell";
 import { Navigate } from "react-router-dom";
 
@@ -196,6 +199,28 @@ const App = () => (
             />
 
             <Route
+              path="/account-management/lawyer-profiles"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Lawyer Profile Management">
+                    <AccountLawyerProfilesPage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/account-management/lawyer-profiles/:userId"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Lawyer Profile Management">
+                    <AccountLawyerProfileDetailPage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
               path="/lead-assignment"
               element={
                 <ProtectedRoute>
@@ -264,6 +289,16 @@ const App = () => (
                   </AppShell>
                 </ProtectedRoute>
               } 
+            />
+            <Route
+              path="/add-law-firm"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Add Law Firm">
+                    <NewLawFirm />
+                  </AppShell>
+                </ProtectedRoute>
+              }
             />
             <Route 
               path="/call-result-journey" 

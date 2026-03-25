@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -176,6 +176,9 @@ const SubmissionPortalPage = () => {
   const [statusFilter, setStatusFilter] = useState("__ALL__");
   const [leadVendorFilter, setLeadVendorFilter] = useState("__ALL__");
   const [searchTerm, setSearchTerm] = useState<string>("");
+  const [searchDropdownOpen, setSearchDropdownOpen] = useState(false);
+  const searchDropdownRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [showDuplicates, setShowDuplicates] = useState(true);
   const [dataCompletenessFilter, setDataCompletenessFilter] = useState("__ALL__");
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -977,7 +980,7 @@ const SubmissionPortalPage = () => {
       );
 
       toast({
-        title: 'Transfer Updated',
+        title: 'Contact Updated',
         description: 'Stage and notes updated successfully.',
       });
 
@@ -1000,12 +1003,73 @@ const SubmissionPortalPage = () => {
         <div className="max-w-7xl mx-auto space-y-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-1 flex-wrap items-center gap-3">
-              <Input
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search by name, phone, vendor..."
-                className="max-w-md"
-              />
+              <div className="relative w-full max-w-md" ref={searchDropdownRef}>
+                <Input
+                  ref={searchInputRef}
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setSearchDropdownOpen(true);
+                  }}
+                  onFocus={() => setSearchDropdownOpen(true)}
+                  onBlur={() => {
+                    window.setTimeout(() => setSearchDropdownOpen(false), 200);
+                  }}
+                  placeholder="Search by lawyer, law firm, phone..."
+                  className="w-full"
+                />
+
+                {searchDropdownOpen && (() => {
+                  const query = searchTerm.trim().toLowerCase();
+                  const base = data;
+                  const suggestions = (query ? base : base).filter((lead) => {
+                    if (!query) return true;
+                    const name = (lead.insured_name || "").toLowerCase();
+                    const firm = (lead.lead_vendor || "").toLowerCase();
+                    const phone = (lead.client_phone_number || "").toLowerCase();
+                    return name.includes(query) || firm.includes(query) || phone.includes(query);
+                  });
+
+                  const displayItems = suggestions.slice(0, 50);
+                  if (displayItems.length === 0) return null;
+
+                  return (
+                    <div className="absolute z-50 mt-1 max-h-64 w-full overflow-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
+                      {displayItems.map((lead) => {
+                        const name = (lead.insured_name || "N/A").trim() || "N/A";
+                        const firm = (lead.lead_vendor || "").trim();
+                        const phone = (lead.client_phone_number || "").trim();
+                        const sub = [firm, phone].filter(Boolean).join(" • ");
+                        const nextTerm = (lead.insured_name || lead.lead_vendor || lead.client_phone_number || "").trim();
+
+                        return (
+                          <button
+                            key={lead.id}
+                            type="button"
+                            className="w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setSearchTerm(nextTerm);
+                              setSearchDropdownOpen(false);
+                            }}
+                          >
+                            <div className="flex flex-col gap-0.5">
+                              <span className="truncate font-medium">{name}</span>
+                              {sub ? <span className="truncate text-xs text-muted-foreground">{sub}</span> : null}
+                            </div>
+                          </button>
+                        );
+                      })}
+
+                      {suggestions.length > 50 && (
+                        <div className="px-2 py-1.5 text-xs text-muted-foreground text-center">
+                          {suggestions.length - 50} more results...
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
 
               <Select value={leadVendorFilter} onValueChange={(v) => setLeadVendorFilter(v)}>
                 <SelectTrigger className="w-56">
@@ -1048,7 +1112,7 @@ const SubmissionPortalPage = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="all">All Leads</SelectItem>
                     {user?.id ? <SelectItem value={user.id}>My Leads</SelectItem> : null}
                     {marketingTeam
                       .filter((m) => m.user_id !== user?.id)
@@ -1256,7 +1320,7 @@ const SubmissionPortalPage = () => {
       >
         <DialogContent className="sm:max-w-[520px]">
           <DialogHeader>
-            <DialogTitle>Edit Transfer</DialogTitle>
+            <DialogTitle>Edit Contact</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4">

@@ -308,10 +308,10 @@ const LeadAssignmentPage = () => {
               <div className="text-sm font-medium text-muted-foreground">Assignee</div>
               <Select value={assigneeFilter} onValueChange={setAssigneeFilter} disabled={loading}>
                 <SelectTrigger>
-                  <SelectValue placeholder="All" />
+                  <SelectValue placeholder="All Leads" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="all">All Leads</SelectItem>
                   {team.map((m) => (
                     <SelectItem key={m.user_id} value={m.user_id}>
                       {m.display_name || m.email}

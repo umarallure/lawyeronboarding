@@ -262,6 +262,10 @@ const AppShell = ({
             label: 'Onboarding Management',
             to: '/account-management/onboarding',
           },
+          {
+            label: 'Lawyer Profile Management',
+            to: '/account-management/lawyer-profiles',
+          },
         ],
       },
     ];
