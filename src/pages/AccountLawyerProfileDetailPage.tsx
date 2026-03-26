@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import LogoLoader from "@/components/LogoLoader";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, RefreshCw, Save, UserRound, X } from "lucide-react";
 
@@ -145,7 +146,7 @@ const AccountLawyerProfileDetailPage = () => {
   const editMode = searchParams.get("edit") === "true";
   const { toast } = useToast();
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [appUser, setAppUser] = useState<AppUserRow | null>(null);
@@ -577,6 +578,10 @@ const AccountLawyerProfileDetailPage = () => {
       </Button>
     );
   };
+
+  if (loading && !appUser) {
+    return <LogoLoader page label="Loading profile..." />;
+  }
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-6">

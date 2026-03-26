@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import LogoLoader from "@/components/LogoLoader";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, BriefcaseBusiness, Clock3, MapPinned, Phone, RefreshCw, UserRound } from "lucide-react";
 
@@ -156,7 +157,7 @@ const AccountOrderDetailPage = () => {
   const navigate = useNavigate();
   const { orderId } = useParams();
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [order, setOrder] = useState<OrderRow | null>(null);
   const [attorneyProfile, setAttorneyProfile] = useState<AttorneyProfileRow | null>(null);
@@ -346,6 +347,10 @@ const AccountOrderDetailPage = () => {
   ]);
   const attorneyEmail = pickFirstString(attorneyProfile, ["primary_email", "email"]);
   const lawyerDisplayName = attorneyProfileName || attorneyEmail || "Unknown lawyer";
+
+  if (loading && !order) {
+    return <LogoLoader page label="Loading order..." />;
+  }
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-6">

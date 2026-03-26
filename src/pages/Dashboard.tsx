@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import LogoLoader from '@/components/LogoLoader';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchInstantlyOverview } from '@/lib/instantly';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -132,6 +133,7 @@ const getPresetRangeBounds = (range: PresetTimeRange) => {
 
 const Dashboard = () => {
   const [stats, setStats] = useState<DashboardStats>(EMPTY_STATS);
+  const [statsLoading, setStatsLoading] = useState(true);
 
   const [timeRange, setTimeRange] = useState<DashboardTimeRange>('this_month');
   const [customStartDate, setCustomStartDate] = useState<string>('');
@@ -148,6 +150,8 @@ const Dashboard = () => {
     let cancelled = false;
 
     const run = async () => {
+      setStatsLoading(true);
+
       let start: Date;
       let end: Date;
 
@@ -155,6 +159,7 @@ const Dashboard = () => {
         if (!customStartDate || !customEndDate) {
           setDealFlowTrend([]);
           setStats(EMPTY_STATS);
+          setStatsLoading(false);
           return;
         }
 
@@ -382,6 +387,7 @@ const Dashboard = () => {
       }));
 
       setDealFlowTrend(trend);
+      setStatsLoading(false);
     };
 
     run();
@@ -424,6 +430,10 @@ const Dashboard = () => {
       : visibleStats.length === 0
         ? 'No Stats'
         : `${visibleStats.length} Stats`;
+
+  if (statsLoading) {
+    return <LogoLoader page label="Loading dashboard..." />;
+  }
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-6">

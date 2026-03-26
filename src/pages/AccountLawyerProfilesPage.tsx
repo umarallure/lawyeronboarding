@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import LogoLoader from "@/components/LogoLoader";
 import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff, MoreHorizontal, RefreshCw, Search, Trash2, UserPlus } from "lucide-react";
 
@@ -106,7 +107,7 @@ const AccountLawyerProfilesPage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [lawyers, setLawyers] = useState<AppUserRow[]>([]);
@@ -326,6 +327,10 @@ const AccountLawyerProfilesPage = () => {
       setDeleting(false);
     }
   };
+
+  if (loading && lawyers.length === 0) {
+    return <LogoLoader page label="Loading lawyer profiles..." />;
+  }
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-6">
