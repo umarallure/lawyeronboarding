@@ -203,7 +203,7 @@ export const CallbackRequestForm = ({ lead, leadVendor, open, onClose, onSuccess
                     <p className="text-sm font-medium">${lead.monthly_premium?.toLocaleString() || 'N/A'}</p>
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">Created Date</Label>
+                    <Label className="text-xs text-muted-foreground">Date</Label>
                     <p className="text-sm font-medium">
                       {lead.created_at ? format(new Date(lead.created_at), 'MMM dd, yyyy') : 'N/A'}
                     </p>

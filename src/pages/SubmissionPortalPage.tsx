@@ -22,7 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, RefreshCw, Pencil, StickyNote } from "lucide-react";
+import { Loader2, RefreshCw, Pencil, StickyNote, SlidersHorizontal, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAttorneys } from "@/hooks/useAttorneys";
 import { usePipelineStages, type PipelineStage } from "@/hooks/usePipelineStages";
@@ -35,13 +35,54 @@ import {
   deriveParentKey,
   type ParentStage,
 } from "@/lib/stageUtils";
+import {
+  addDays,
+  endOfMonth,
+  endOfWeek,
+  parseISO,
+  startOfDay,
+  startOfMonth,
+  startOfWeek,
+  subMonths,
+  subWeeks,
+} from "date-fns";
+
+type DateRange = "all_time" | "this_week" | "last_week" | "this_month" | "last_month" | "custom";
+type PresetDateRange = Exclude<DateRange, "all_time" | "custom">;
+
+const getPresetRangeBounds = (range: PresetDateRange) => {
+  const now = new Date();
+  if (range === "this_week") {
+    const start = startOfWeek(now, { weekStartsOn: 1 });
+    const end = endOfWeek(now, { weekStartsOn: 1 });
+    return { start, end };
+  }
+
+  if (range === "last_week") {
+    const ref = subWeeks(now, 1);
+    const start = startOfWeek(ref, { weekStartsOn: 1 });
+    const end = endOfWeek(ref, { weekStartsOn: 1 });
+    return { start, end };
+  }
+
+  if (range === "this_month") {
+    const start = startOfMonth(now);
+    const end = endOfMonth(now);
+    return { start, end };
+  }
+
+  const ref = subMonths(now, 1);
+  const start = startOfMonth(ref);
+  const end = endOfMonth(ref);
+  return { start, end };
+};
 
 export interface SubmissionPortalRow {
   id: string;
+  ui_id?: string;
   submission_id: string;
   pipeline_name?: string | null;
   display_stage_key?: string;
-  marketing_source_stage?: string | null;
   date?: string;
   insured_name?: string;
   lead_vendor?: string;
@@ -172,10 +213,13 @@ const SubmissionPortalPage = () => {
   const [filteredData, setFilteredData] = useState<SubmissionPortalRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [dateFilter, setDateFilter] = useState<string>("");
+  const [timeRange, setTimeRange] = useState<DateRange>("all_time");
+  const [customStartDate, setCustomStartDate] = useState<string>("");
+  const [customEndDate, setCustomEndDate] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState("__ALL__");
   const [leadVendorFilter, setLeadVendorFilter] = useState("__ALL__");
   const [searchTerm, setSearchTerm] = useState<string>("");
+  const [showFilterRow, setShowFilterRow] = useState(false);
   const [searchDropdownOpen, setSearchDropdownOpen] = useState(false);
   const searchDropdownRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -192,6 +236,7 @@ const SubmissionPortalPage = () => {
   const [editOpen, setEditOpen] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [editRow, setEditRow] = useState<SubmissionPortalRow | null>(null);
+  const [editPipeline, setEditPipeline] = useState<string>("lawyer_portal");
   const [editStage, setEditStage] = useState("");
   const [editReason, setEditReason] = useState("");
   const [editNotes, setEditNotes] = useState("");
@@ -235,11 +280,6 @@ const SubmissionPortalPage = () => {
       filtered = filtered.filter((record) => (record.assigned_user_id || '') === assigneeFilter);
     }
 
-    // Apply date filter
-    if (dateFilter) {
-      filtered = filtered.filter(record => record.date === dateFilter);
-    }
-
     // Apply status filter
     if (statusFilter !== "__ALL__") {
       filtered = filtered.filter((record) => (record.status || '') === statusFilter);
@@ -273,7 +313,7 @@ const SubmissionPortalPage = () => {
     // lawyer_leads rows do not include those fields, so keep behavior as a no-op.
 
     return filtered;
-  }, [assigneeFilter, dateFilter, leadVendorFilter, removeDuplicates, searchTerm, showDuplicates, statusFilter]);
+  }, [assigneeFilter, leadVendorFilter, removeDuplicates, searchTerm, showDuplicates, statusFilter]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -294,6 +334,27 @@ const SubmissionPortalPage = () => {
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [data]);
 
+  const defaultAssigneeFilter = canViewTeamAssigneeFilter ? "all" : (user?.id || "all");
+  const hasActiveFilters =
+    searchTerm.trim().length > 0 ||
+    leadVendorFilter !== "__ALL__" ||
+    statusFilter !== "__ALL__" ||
+    assigneeFilter !== defaultAssigneeFilter ||
+    timeRange !== "all_time" ||
+    customStartDate.length > 0 ||
+    customEndDate.length > 0;
+
+  const handleClearFilters = () => {
+    setSearchTerm("");
+    setLeadVendorFilter("__ALL__");
+    setStatusFilter("__ALL__");
+    setAssigneeFilter(defaultAssigneeFilter);
+    setTimeRange("all_time");
+    setCustomStartDate("");
+    setCustomEndDate("");
+    setShowFilterRow(false);
+  };
+
   const readyToMoveForwardStage = useMemo(() => {
     return (
       dbSubmissionStages.find((s) => s.key === "ready_to_move_forward") ||
@@ -303,25 +364,15 @@ const SubmissionPortalPage = () => {
     );
   }, [dbSubmissionStages]);
 
-  const scheduledMarketingStageIds = useMemo(() => {
-    const onboardingStages = dbMarketingStages.filter((stage) => {
+  const scheduledForOnboardingStageKeys = useMemo(() => {
+    const stages = dbMarketingStages.filter((stage) => {
       const key = (stage.key || "").trim().toLowerCase();
       const label = (stage.label || "").trim().toLowerCase();
-      return key.includes("scheduled") && key.includes("onboard")
-        || label.includes("scheduled") && label.includes("onboard");
+      return (key.includes("scheduled") && key.includes("onboard")) || (label.includes("scheduled") && label.includes("onboard"));
     });
 
-    const fallbackStages = onboardingStages.length > 0
-      ? onboardingStages
-      : dbMarketingStages.filter((stage) => {
-          const key = (stage.key || "").trim().toLowerCase();
-          const label = (stage.label || "").trim().toLowerCase();
-          return key.includes("scheduled") && key.includes("zoom")
-            || label.includes("scheduled") && label.includes("zoom");
-        });
-
     return new Set(
-      fallbackStages
+      stages
         .flatMap((stage) => [stage.id, stage.key])
         .map((value) => (value || "").trim())
         .filter(Boolean)
@@ -464,30 +515,80 @@ const SubmissionPortalPage = () => {
     try {
       setRefreshing(true);
 
-      type QueryRes = { data: unknown[] | null; error: { message?: string } | null };
-
-      const lawyerLeadsQuery = supabase as unknown as {
+      type LeadsQueryRes = { data: unknown[] | null; error: { message?: string } | null };
+      type LeadsQuery = PromiseLike<LeadsQueryRes> & {
+        gte: (column: string, value: string) => LeadsQuery;
+        lt: (column: string, value: string) => LeadsQuery;
+        in: (column: string, values: string[]) => LeadsQuery;
+        order: (column: string, opts: { ascending: boolean }) => LeadsQuery;
+      };
+      const sb = supabase as unknown as {
         from: (table: string) => {
           select: (columns: string) => {
-            eq: (column: string, value: string) => {
-              order: (column: string, options: { ascending: boolean }) => Promise<QueryRes>;
-            };
+            eq: (column: string, value: string) => LeadsQuery;
+            in: (column: string, values: string[]) => LeadsQuery;
           };
         };
       };
 
-      const [lawyerPortalRes, marketingPipelineRes] = await Promise.all([
-        lawyerLeadsQuery
-          .from('lawyer_leads')
-          .select('id,submission_id,lawyer_full_name,firm_name,phone_number,stage_id,submission_date,created_at,additional_notes,assigned_user_id,pipeline_name,marketing_source_stage')
-          .eq('pipeline_name', 'lawyer_portal')
-          .order('created_at', { ascending: false }),
-        lawyerLeadsQuery
-          .from('lawyer_leads')
-          .select('id,submission_id,lawyer_full_name,firm_name,phone_number,stage_id,submission_date,created_at,additional_notes,assigned_user_id,pipeline_name,marketing_source_stage')
-          .eq('pipeline_name', 'cold_call_pipeline')
-          .order('created_at', { ascending: false }),
-      ]);
+      const resolveDateRange = (): { startIso: string; endExclusiveIso: string } | null => {
+        if (timeRange === "all_time") return null;
+
+        let start: Date;
+        let end: Date;
+
+        if (timeRange === "custom") {
+          if (!customStartDate || !customEndDate) return null;
+          start = startOfDay(parseISO(customStartDate));
+          end = startOfDay(parseISO(customEndDate));
+          if (end < start) end = start;
+        } else {
+          const bounds = getPresetRangeBounds(timeRange as PresetDateRange);
+          start = bounds.start;
+          end = bounds.end;
+        }
+
+        const startIso = start.toISOString();
+        const endExclusiveIso = addDays(startOfDay(end), 1).toISOString();
+        return { startIso, endExclusiveIso };
+      };
+
+      const range = resolveDateRange();
+
+      let lawyerPortalQ = sb
+        .from("lawyer_leads")
+        .select("id,submission_id,lawyer_full_name,firm_name,phone_number,stage_id,submission_date,created_at,additional_notes,assigned_user_id,pipeline_name")
+        .eq("pipeline_name", "lawyer_portal");
+
+      const scheduledKeys = Array.from(scheduledForOnboardingStageKeys);
+
+      let marketingScheduledQ =
+        scheduledKeys.length === 0
+          ? null
+          : sb
+              .from("lawyer_leads")
+              .select(
+                "id,submission_id,lawyer_full_name,firm_name,phone_number,stage_id,submission_date,created_at,additional_notes,assigned_user_id,pipeline_name"
+              )
+              .eq("pipeline_name", "cold_call_pipeline")
+              .in("stage_id", scheduledKeys);
+
+      if (range) {
+        lawyerPortalQ = lawyerPortalQ.gte("created_at", range.startIso).lt("created_at", range.endExclusiveIso);
+        if (marketingScheduledQ) {
+          marketingScheduledQ = marketingScheduledQ
+            .gte("created_at", range.startIso)
+            .lt("created_at", range.endExclusiveIso);
+        }
+      }
+
+      lawyerPortalQ = lawyerPortalQ.order("created_at", { ascending: false });
+
+      const marketingScheduledRes: LeadsQueryRes = marketingScheduledQ
+        ? await marketingScheduledQ.order("created_at", { ascending: false })
+        : { data: [], error: null };
+
+      const lawyerPortalRes = await lawyerPortalQ;
 
       if (lawyerPortalRes.error) {
         console.error('Error fetching lawyer portal leads:', lawyerPortalRes.error);
@@ -499,18 +600,8 @@ const SubmissionPortalPage = () => {
         return;
       }
 
-      if (marketingPipelineRes.error) {
-        console.error('Error fetching marketing pipeline leads for lawyer portal:', marketingPipelineRes.error);
-        toast({
-          title: 'Error',
-          description: 'Failed to fetch lawyer portal data',
-          variant: 'destructive',
-        });
-        return;
-      }
-
       const leadsRaw = lawyerPortalRes.data;
-      const marketingLeadsRaw = marketingPipelineRes.data;
+      const marketingScheduledRaw = marketingScheduledRes.data;
 
       const leads = ((leadsRaw ?? []) as unknown as Array<{
         id: string;
@@ -520,20 +611,13 @@ const SubmissionPortalPage = () => {
         firm_name: string | null;
         phone_number: string | null;
         stage_id: string | null;
-        marketing_source_stage?: string | null;
         submission_date: string | null;
         created_at: string | null;
         additional_notes: string | null;
         assigned_user_id?: string | null;
       }>);
 
-      const eligibleLawyerPortalLeads = leads.filter((lead) => {
-        const sourceStage = (lead.marketing_source_stage || '').trim();
-        if (!sourceStage) return true;
-        return scheduledMarketingStageIds.has(sourceStage);
-      });
-
-      const marketingLeads = ((marketingLeadsRaw ?? []) as unknown as Array<{
+      const marketingScheduledLeads = ((marketingScheduledRaw ?? []) as unknown as Array<{
         id: string;
         submission_id: string;
         pipeline_name?: string | null;
@@ -541,14 +625,13 @@ const SubmissionPortalPage = () => {
         firm_name: string | null;
         phone_number: string | null;
         stage_id: string | null;
-        marketing_source_stage?: string | null;
         submission_date: string | null;
         created_at: string | null;
         additional_notes: string | null;
         assigned_user_id?: string | null;
-      }>).filter((lead) => scheduledMarketingStageIds.has((lead.stage_id || "").trim()));
+      }>);
 
-      const mapped: SubmissionPortalRow[] = eligibleLawyerPortalLeads.map((l) => {
+      const mapped: SubmissionPortalRow[] = leads.map((l) => {
         const lawyerStageLabel = dbSubmissionStages.find((s) => s.key === (l.stage_id || ''))?.label ||
           dbSubmissionStages.find((s) => s.id === (l.stage_id || ''))?.label ||
           undefined;
@@ -557,7 +640,6 @@ const SubmissionPortalPage = () => {
           id: l.id,
           submission_id: l.submission_id,
           pipeline_name: l.pipeline_name ?? 'lawyer_portal',
-          marketing_source_stage: l.marketing_source_stage ?? null,
           insured_name: l.lawyer_full_name ?? undefined,
           client_phone_number: l.phone_number ?? undefined,
           lead_vendor: l.firm_name ?? undefined,
@@ -571,12 +653,13 @@ const SubmissionPortalPage = () => {
         };
       });
 
-      const supplementalReadyRows: SubmissionPortalRow[] = marketingLeads.map((lead) => ({
+      const readyStageKey = readyToMoveForwardStage?.key ?? 'ready_to_move_forward';
+      const overlayRows: SubmissionPortalRow[] = marketingScheduledLeads.map((lead) => ({
         id: lead.id,
+        ui_id: `${lead.id}:overlay:ready_to_move_forward`,
         submission_id: lead.submission_id,
         pipeline_name: lead.pipeline_name ?? 'cold_call_pipeline',
-        display_stage_key: readyToMoveForwardStage?.key ?? 'ready_to_move_forward',
-        marketing_source_stage: lead.marketing_source_stage ?? lead.stage_id ?? null,
+        display_stage_key: readyStageKey,
         insured_name: lead.lawyer_full_name ?? undefined,
         client_phone_number: lead.phone_number ?? undefined,
         lead_vendor: lead.firm_name ?? undefined,
@@ -589,7 +672,7 @@ const SubmissionPortalPage = () => {
         date: (lead.submission_date || lead.created_at || '').slice(0, 10) || undefined,
       }));
 
-      const combined = [...mapped, ...supplementalReadyRows].sort((a, b) =>
+      const combined = [...mapped, ...overlayRows].sort((a, b) =>
         new Date(b.created_at || b.submission_date || 0).getTime() - new Date(a.created_at || a.submission_date || 0).getTime()
       );
 
@@ -613,7 +696,15 @@ const SubmissionPortalPage = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [dbSubmissionStages, readyToMoveForwardStage, scheduledMarketingStageIds, toast]);
+  }, [
+    customEndDate,
+    customStartDate,
+    dbSubmissionStages,
+    timeRange,
+    toast,
+    readyToMoveForwardStage,
+    scheduledForOnboardingStageKeys,
+  ]);
 
   // Update filtered data whenever data or filters change
   useEffect(() => {
@@ -696,7 +787,6 @@ const SubmissionPortalPage = () => {
             stage_id: stageKey,
             display_stage_key: undefined,
             status: dbSubmissionStages.find((s) => s.key === stageKey)?.label || r.status,
-            marketing_source_stage: r.marketing_source_stage ?? r.stage_id ?? null,
             pipeline_name: shouldPromoteToLawyerPortal ? 'lawyer_portal' : r.pipeline_name,
           }
         : r
@@ -719,7 +809,6 @@ const SubmissionPortalPage = () => {
             ? {
                 stage_id: stageKey,
                 pipeline_name: 'lawyer_portal',
-                marketing_source_stage: row?.marketing_source_stage ?? row?.stage_id ?? null,
               }
             : { stage_id: stageKey }
         )
@@ -775,17 +864,23 @@ const SubmissionPortalPage = () => {
     [parentStages]
   );
 
-  const editStageMatches = useMemo(() => {
-    const query = (editStage || '').trim().toLowerCase();
-    if (!query) return allParentStageLabels;
-    return allParentStageLabels.filter((label) => label.toLowerCase().includes(query));
-  }, [allParentStageLabels, editStage]);
+  const editMarketingStageLabels = useMemo(() => {
+    return Array.from(new Set(dbMarketingStages.map((s) => s.label).filter(Boolean)));
+  }, [dbMarketingStages]);
 
-  // Available reasons for the currently selected parent in the edit form
+  const editStageMatches = useMemo(() => {
+    const pool = editPipeline === 'lawyer_portal' ? allParentStageLabels : editMarketingStageLabels;
+    const query = (editStage || '').trim().toLowerCase();
+    if (!query) return pool;
+    return pool.filter((label) => label.toLowerCase().includes(query));
+  }, [editPipeline, allParentStageLabels, editMarketingStageLabels, editStage]);
+
+  // Available reasons for the currently selected parent in the edit form (lawyer_portal only)
   const editAvailableReasons = useMemo(() => {
+    if (editPipeline !== 'lawyer_portal') return [];
     const parentLabel = (editStage || '').trim();
     return reasonsByParent[parentLabel] || [];
-  }, [editStage, reasonsByParent]);
+  }, [editPipeline, editStage, reasonsByParent]);
 
   if (loading) {
     return (
@@ -806,14 +901,26 @@ const SubmissionPortalPage = () => {
   };
 
   const handleOpenEdit = (row: SubmissionPortalRow) => {
+    const pipeline = row.pipeline_name || 'lawyer_portal';
     setEditRow(row);
-    const currentLabel =
-      dbSubmissionStages.find((s) => s.key === (row.display_stage_key || row.stage_id || ''))?.label ||
-      dbSubmissionStages.find((s) => s.id === (row.display_stage_key || row.stage_id || ''))?.label ||
-      '';
-    const { parent, reason } = parseStageLabel(currentLabel.trim());
-    setEditStage(parent);
-    setEditReason(reason || '');
+    setEditPipeline(pipeline);
+    const stageId = row.display_stage_key || row.stage_id || '';
+    if (pipeline === 'lawyer_portal') {
+      const currentLabel =
+        dbSubmissionStages.find((s) => s.key === stageId)?.label ||
+        dbSubmissionStages.find((s) => s.id === stageId)?.label ||
+        '';
+      const { parent, reason } = parseStageLabel(currentLabel.trim());
+      setEditStage(parent);
+      setEditReason(reason || '');
+    } else {
+      const currentLabel =
+        dbMarketingStages.find((s) => s.key === stageId)?.label ||
+        dbMarketingStages.find((s) => s.id === stageId)?.label ||
+        '';
+      setEditStage(currentLabel);
+      setEditReason('');
+    }
     setEditNotes('');
     setEditStageOpen(false);
     setEditOpen(true);
@@ -824,18 +931,26 @@ const SubmissionPortalPage = () => {
     const parentLabel = (editStage || '').trim();
     if (!parentLabel) return;
 
-    // Build the full status: "Parent - Reason" or just "Parent"
-    const reasons = reasonsByParent[parentLabel];
-    const selectedReason = (editReason || '').trim();
-    const nextStage = reasons && reasons.length > 0 && selectedReason
-      ? buildStatusLabel(parentLabel, selectedReason)
-      : parentLabel;
+    // Build full status label and find the stage row based on selected pipeline
+    let nextStage: string;
+    let nextStageRow: { key: string; label: string } | undefined;
 
-    const nextStageRow = dbSubmissionStages.find((s) => s.label === nextStage);
+    if (editPipeline === 'lawyer_portal') {
+      const reasons = reasonsByParent[parentLabel];
+      const selectedReason = (editReason || '').trim();
+      nextStage = reasons && reasons.length > 0 && selectedReason
+        ? buildStatusLabel(parentLabel, selectedReason)
+        : parentLabel;
+      nextStageRow = dbSubmissionStages.find((s) => s.label === nextStage);
+    } else {
+      nextStage = parentLabel;
+      nextStageRow = dbMarketingStages.find((s) => s.label === nextStage);
+    }
+
     if (!nextStageRow) return;
 
     const previousStage = (editRow.display_stage_key || editRow.stage_id || '').trim();
-    const stageChanged = previousStage !== nextStageRow.key;
+    const stageChanged = previousStage !== nextStageRow.key || (editRow.pipeline_name || 'lawyer_portal') !== editPipeline;
 
     try {
       setEditSaving(true);
@@ -859,18 +974,7 @@ const SubmissionPortalPage = () => {
 
       const { error } = await sb
         .from('lawyer_leads')
-        .update(
-          editRow.pipeline_name !== 'lawyer_portal'
-            ? stageChanged
-              ? {
-                  stage_id: nextStageRow.key,
-                  additional_notes: editNotes,
-                  pipeline_name: 'lawyer_portal',
-                  marketing_source_stage: editRow.marketing_source_stage ?? editRow.stage_id ?? null,
-                }
-              : { additional_notes: editNotes }
-            : { stage_id: nextStageRow.key, additional_notes: editNotes }
-        )
+        .update({ stage_id: nextStageRow.key, additional_notes: editNotes, pipeline_name: editPipeline })
         .eq('id', editRow.id);
 
       if (error) throw error;
@@ -936,48 +1040,20 @@ const SubmissionPortalPage = () => {
         }
       }
 
-      setData((prev) =>
-        prev.map((r) =>
-          r.id === editRow.id
-            ? {
-                ...r,
-                stage_id:
-                  editRow.pipeline_name !== 'lawyer_portal' && !stageChanged
-                    ? r.stage_id
-                    : nextStageRow.key,
-                display_stage_key:
-                  editRow.pipeline_name !== 'lawyer_portal'
-                    ? (stageChanged ? undefined : r.display_stage_key)
-                    : undefined,
-                notes: editNotes,
-                status: nextStage,
-                marketing_source_stage: r.marketing_source_stage ?? editRow.marketing_source_stage ?? editRow.stage_id ?? null,
-                pipeline_name: editRow.pipeline_name !== 'lawyer_portal' && stageChanged ? 'lawyer_portal' : r.pipeline_name,
-              }
-            : r
-        )
-      );
-      setFilteredData((prev) =>
-        prev.map((r) =>
-          r.id === editRow.id
-            ? {
-                ...r,
-                stage_id:
-                  editRow.pipeline_name !== 'lawyer_portal' && !stageChanged
-                    ? r.stage_id
-                    : nextStageRow.key,
-                display_stage_key:
-                  editRow.pipeline_name !== 'lawyer_portal'
-                    ? (stageChanged ? undefined : r.display_stage_key)
-                    : undefined,
-                notes: editNotes,
-                status: nextStage,
-                marketing_source_stage: r.marketing_source_stage ?? editRow.marketing_source_stage ?? editRow.stage_id ?? null,
-                pipeline_name: editRow.pipeline_name !== 'lawyer_portal' && stageChanged ? 'lawyer_portal' : r.pipeline_name,
-              }
-            : r
-        )
-      );
+      const optimisticUpdate = (r: SubmissionPortalRow) =>
+        r.id === editRow.id
+          ? {
+              ...r,
+              stage_id: nextStageRow.key,
+              display_stage_key: nextStageRow.key,
+              notes: editNotes,
+              status: nextStage,
+              pipeline_name: editPipeline,
+            }
+          : r;
+
+      setData((prev) => prev.map(optimisticUpdate));
+      setFilteredData((prev) => prev.map(optimisticUpdate));
 
       toast({
         title: 'Contact Updated',
@@ -1001,142 +1077,239 @@ const SubmissionPortalPage = () => {
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-7xl mx-auto space-y-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-1 flex-wrap items-center gap-3">
-              <div className="relative w-full max-w-md" ref={searchDropdownRef}>
-                <Input
-                  ref={searchInputRef}
-                  value={searchTerm}
-                  onChange={(e) => {
-                    setSearchTerm(e.target.value);
-                    setSearchDropdownOpen(true);
-                  }}
-                  onFocus={() => setSearchDropdownOpen(true)}
-                  onBlur={() => {
-                    window.setTimeout(() => setSearchDropdownOpen(false), 200);
-                  }}
-                  placeholder="Search by lawyer, law firm, phone..."
-                  className="w-full"
-                />
+          <div className="rounded-2xl border bg-card p-4 shadow-sm">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+              <div className="grid flex-1 gap-3 xl:grid-cols-[minmax(300px,1fr)_auto_auto]">
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Search</Label>
+                  <div className="relative" ref={searchDropdownRef}>
+                    <Input
+                      ref={searchInputRef}
+                      value={searchTerm}
+                      onChange={(e) => {
+                        setSearchTerm(e.target.value);
+                        setSearchDropdownOpen(true);
+                      }}
+                      onFocus={() => setSearchDropdownOpen(true)}
+                      onBlur={() => {
+                        window.setTimeout(() => setSearchDropdownOpen(false), 200);
+                      }}
+                      placeholder="Search by lawyer, law firm, phone..."
+                      className="w-full"
+                    />
 
-                {searchDropdownOpen && (() => {
-                  const query = searchTerm.trim().toLowerCase();
-                  const base = data;
-                  const suggestions = (query ? base : base).filter((lead) => {
-                    if (!query) return true;
-                    const name = (lead.insured_name || "").toLowerCase();
-                    const firm = (lead.lead_vendor || "").toLowerCase();
-                    const phone = (lead.client_phone_number || "").toLowerCase();
-                    return name.includes(query) || firm.includes(query) || phone.includes(query);
-                  });
+                    {searchDropdownOpen && (() => {
+                      const query = searchTerm.trim().toLowerCase();
+                      const base = data;
+                      const suggestions = (query ? base : base).filter((lead) => {
+                        if (!query) return true;
+                        const name = (lead.insured_name || "").toLowerCase();
+                        const firm = (lead.lead_vendor || "").toLowerCase();
+                        const phone = (lead.client_phone_number || "").toLowerCase();
+                        return name.includes(query) || firm.includes(query) || phone.includes(query);
+                      });
 
-                  const displayItems = suggestions.slice(0, 50);
-                  if (displayItems.length === 0) return null;
+                      const displayItems = suggestions.slice(0, 50);
+                      if (displayItems.length === 0) return null;
 
-                  return (
-                    <div className="absolute z-50 mt-1 max-h-64 w-full overflow-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
-                      {displayItems.map((lead) => {
-                        const name = (lead.insured_name || "N/A").trim() || "N/A";
-                        const firm = (lead.lead_vendor || "").trim();
-                        const phone = (lead.client_phone_number || "").trim();
-                        const sub = [firm, phone].filter(Boolean).join(" • ");
-                        const nextTerm = (lead.insured_name || lead.lead_vendor || lead.client_phone_number || "").trim();
+                      return (
+                        <div className="absolute z-50 mt-1 max-h-64 w-full overflow-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
+                          {displayItems.map((lead) => {
+                            const name = (lead.insured_name || "N/A").trim() || "N/A";
+                            const firm = (lead.lead_vendor || "").trim();
+                            const phone = (lead.client_phone_number || "").trim();
+                            const sub = [firm, phone].filter(Boolean).join(" • ");
+                            const nextTerm = (lead.insured_name || lead.lead_vendor || lead.client_phone_number || "").trim();
 
-                        return (
-                          <button
-                            key={lead.id}
-                            type="button"
-                            className="w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => {
-                              setSearchTerm(nextTerm);
-                              setSearchDropdownOpen(false);
-                            }}
-                          >
-                            <div className="flex flex-col gap-0.5">
-                              <span className="truncate font-medium">{name}</span>
-                              {sub ? <span className="truncate text-xs text-muted-foreground">{sub}</span> : null}
+                            return (
+                              <button
+                                key={lead.id}
+                                type="button"
+                                className="w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => {
+                                  setSearchTerm(nextTerm);
+                                  setSearchDropdownOpen(false);
+                                }}
+                              >
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="truncate font-medium">{name}</span>
+                                  {sub ? <span className="truncate text-xs text-muted-foreground">{sub}</span> : null}
+                                </div>
+                              </button>
+                            );
+                          })}
+
+                          {suggestions.length > 50 && (
+                            <div className="px-2 py-1.5 text-center text-xs text-muted-foreground">
+                              {suggestions.length - 50} more results...
                             </div>
-                          </button>
-                        );
-                      })}
-
-                      {suggestions.length > 50 && (
-                        <div className="px-2 py-1.5 text-xs text-muted-foreground text-center">
-                          {suggestions.length - 50} more results...
+                          )}
                         </div>
-                      )}
-                    </div>
-                  );
-                })()}
+                      );
+                    })()}
+                  </div>
+                </div>
+
+                <Button
+                  type="button"
+                  variant={showFilterRow ? "default" : "outline"}
+                  className="gap-2 xl:self-end"
+                  onClick={() => setShowFilterRow((prev) => !prev)}
+                >
+                  <SlidersHorizontal className="h-4 w-4" />
+                  Filter
+                </Button>
+                {hasActiveFilters ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="gap-2 xl:self-end"
+                    onClick={handleClearFilters}
+                  >
+                    <X className="h-4 w-4" />
+                    Clear
+                  </Button>
+                ) : (
+                  <div className="hidden xl:block" />
+                )}
               </div>
 
-              <Select value={leadVendorFilter} onValueChange={(v) => setLeadVendorFilter(v)}>
-                <SelectTrigger className="w-56">
-                  <SelectValue placeholder="All Firms" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="__ALL__">All Firms</SelectItem>
-                    {leadVendorOptions.map((vendor) => (
-                      <SelectItem key={vendor} value={vendor}>
-                        {vendor}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-
-              <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v)}>
-                <SelectTrigger className="w-64">
-                  <SelectValue placeholder="All Statuses" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="__ALL__">All Statuses</SelectItem>
-                    {dbSubmissionStages.map((s) => (
-                      <SelectItem key={s.key} value={s.label}>
-                        {s.label}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-
-              <Select
-                value={assigneeFilter}
-                onValueChange={(v) => setAssigneeFilter(v)}
-              >
-                <SelectTrigger className="w-56">
-                  <SelectValue placeholder="Assignee" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="all">All Leads</SelectItem>
-                    {user?.id ? <SelectItem value={user.id}>My Leads</SelectItem> : null}
-                    {marketingTeam
-                      .filter((m) => m.user_id !== user?.id)
-                      .map((m) => (
-                      <SelectItem key={m.user_id} value={m.user_id}>
-                        {m.display_name}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-
-              <Input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="w-56" />
+              <div className="flex flex-wrap items-center gap-3">
+                <Badge variant="secondary" className="px-3 py-1">
+                  {filteredData.length} records
+                </Badge>
+                <Button onClick={handleRefresh} disabled={refreshing}>
+                  <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+              </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <Badge variant="secondary" className="px-3 py-1">
-                {filteredData.length} records
-              </Badge>
-              <Button onClick={handleRefresh} disabled={refreshing}>
-                <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                Refresh
-              </Button>
-            </div>
+            {showFilterRow && (
+              <div className="mt-4 border-t pt-4">
+                <div className="grid gap-3 xl:grid-cols-[repeat(4,minmax(180px,1fr))]">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Law Firm</Label>
+                    <Select value={leadVendorFilter} onValueChange={(v) => setLeadVendorFilter(v)}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="All Firms" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectItem value="__ALL__">All Firms</SelectItem>
+                          {leadVendorOptions.map((vendor) => (
+                            <SelectItem key={vendor} value={vendor}>
+                              {vendor}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Status</Label>
+                    <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v)}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="All Statuses" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectItem value="__ALL__">All Statuses</SelectItem>
+                          {dbSubmissionStages.map((s) => (
+                            <SelectItem key={s.key} value={s.label}>
+                              {s.label}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Assignee</Label>
+                    <Select
+                      value={assigneeFilter}
+                      onValueChange={(v) => setAssigneeFilter(v)}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Assignee" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectItem value="all">All Leads</SelectItem>
+                          {user?.id ? <SelectItem value={user.id}>My Leads</SelectItem> : null}
+                          {marketingTeam
+                            .filter((m) => m.user_id !== user?.id)
+                            .map((m) => (
+                            <SelectItem key={m.user_id} value={m.user_id}>
+                              {m.display_name}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Date</Label>
+                    <Select
+                      value={timeRange}
+                      onValueChange={(v) => {
+                        const next = v as DateRange;
+                        if (next === "custom" && timeRange !== "custom") {
+                          const seed: PresetDateRange = timeRange === "all_time" ? "this_month" : (timeRange as PresetDateRange);
+                          const bounds = getPresetRangeBounds(seed);
+                          setCustomStartDate(bounds.start.toISOString().slice(0, 10));
+                          setCustomEndDate(bounds.end.toISOString().slice(0, 10));
+                        }
+                        setTimeRange(next);
+                      }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="All Time" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectItem value="all_time">All Time</SelectItem>
+                          <SelectItem value="this_week">This Week</SelectItem>
+                          <SelectItem value="last_week">Last Week</SelectItem>
+                          <SelectItem value="this_month">This Month</SelectItem>
+                          <SelectItem value="last_month">Last Month</SelectItem>
+                          <SelectItem value="custom">Custom</SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {timeRange === "custom" && (
+                  <div className="mt-2 grid grid-cols-2 gap-4 max-w-[360px]">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Start Date</Label>
+                      <Input
+                        type="date"
+                        className="w-full pr-10 tabular-nums"
+                        value={customStartDate}
+                        max={customEndDate || undefined}
+                        onChange={(e) => setCustomStartDate(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">End Date</Label>
+                      <Input
+                        type="date"
+                        className="w-full pr-10 tabular-nums"
+                        value={customEndDate}
+                        min={customStartDate || undefined}
+                        onChange={(e) => setCustomEndDate(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="mt-4 min-h-0 flex-1 overflow-auto" onDragOver={handleKanbanDragOver}>
@@ -1195,7 +1368,7 @@ const SubmissionPortalPage = () => {
 
                             return (
                               <Card
-                                key={row.id}
+                                key={row.ui_id ?? row.id}
                                 draggable
                                 onClick={() => handleView(row)}
                                 onDragStart={(e) => {
@@ -1324,6 +1497,26 @@ const SubmissionPortalPage = () => {
           </DialogHeader>
 
           <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Pipeline</Label>
+              <Select
+                value={editPipeline}
+                onValueChange={(value) => {
+                  setEditPipeline(value);
+                  setEditStage('');
+                  setEditReason('');
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select pipeline" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="lawyer_portal">Lawyer Portal</SelectItem>
+                  <SelectItem value="cold_call_pipeline">Marketing Pipeline</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="space-y-2">
               <Label>Stage</Label>
               <div className="relative">

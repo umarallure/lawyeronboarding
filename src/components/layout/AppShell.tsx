@@ -225,13 +225,13 @@ const AppShell = ({
         show: isSuperAdmin,
       },
       {
-        label: 'Lawyers',
+        label: 'Lawyer Contacts',
         to: '/leads',
         icon: <Users className="h-4 w-4 text-current" />,
         end: true,
       },
       {
-        label: 'Marketing Pipeline',
+        label: 'Marketing Opportunitues',
         to: '/transfer-portal',
         icon: <Eye className="h-4 w-4 text-current" />,
       },
