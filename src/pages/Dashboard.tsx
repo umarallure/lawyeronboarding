@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchInstantlyOverview } from '@/lib/instantly';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Button } from '@/components/ui/button';
 import {
   ChartContainer,
   ChartLegend,
@@ -18,7 +22,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Bar, BarChart, CartesianGrid, XAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
+import { ChevronDown } from 'lucide-react';
 import {
   addDays,
   eachDayOfInterval,
@@ -41,6 +46,7 @@ type DashboardStats = {
   ranMeeting: number;
   signedAgreements: number;
   activeLawyers: number;
+  inactiveLawyers: number;
 };
 
 const EMPTY_STATS: DashboardStats = {
@@ -51,10 +57,35 @@ const EMPTY_STATS: DashboardStats = {
   ranMeeting: 0,
   signedAgreements: 0,
   activeLawyers: 0,
+  inactiveLawyers: 0,
 };
 
+type StatCardKey = keyof DashboardStats;
+
+const ALL_STAT_CARDS: { key: StatCardKey; label: string; subtitle?: string }[] = [
+  { key: 'output', label: 'Output' },
+  { key: 'interestedConnected', label: 'Interested/Connected' },
+  { key: 'scheduledMeetings', label: 'Scheduled Meetings' },
+  { key: 'ranMeeting', label: 'Ran Meeting' },
+  { key: 'signedAgreements', label: 'Signed Agreements' },
+  { key: 'opportunities', label: 'Onboardings' },
+  { key: 'activeLawyers', label: 'Active Lawyers' },
+  { key: 'inactiveLawyers', label: 'Inactive Lawyers' },
+];
+
+// Returns true for known test accounts based on email/name patterns
+const isTestUser = (email: string | null, name: string | null): boolean => {
+  const e = (email ?? '').trim().toLowerCase();
+  const n = (name ?? '').trim().toLowerCase();
+  if (e.startsWith('test@') || e.includes('+test') || e.includes('@example.com') || e === 'test@accidentpayments.com') return true;
+  if (n.startsWith('test') || n.includes(' test ')) return true;
+  return false;
+};
+
+const ALL_STAT_KEYS = ALL_STAT_CARDS.map((c) => c.key);
+
 type TimeRange = 'this_week' | 'last_week' | 'this_month' | 'last_month';
-type PresetTimeRange = Exclude<TimeRange, 'custom'>;
+type PresetTimeRange = TimeRange;
 type DashboardTimeRange = TimeRange | 'custom';
 
 const getRangeLabel = (range: DashboardTimeRange) => {
@@ -102,9 +133,12 @@ const getPresetRangeBounds = (range: PresetTimeRange) => {
 const Dashboard = () => {
   const [stats, setStats] = useState<DashboardStats>(EMPTY_STATS);
 
-  const [timeRange, setTimeRange] = useState<DashboardTimeRange>('this_week');
+  const [timeRange, setTimeRange] = useState<DashboardTimeRange>('this_month');
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
+
+  const [visibleStats, setVisibleStats] = useState<StatCardKey[]>(ALL_STAT_KEYS);
+  const [statPickerOpen, setStatPickerOpen] = useState(false);
 
   const [dealFlowTrend, setDealFlowTrend] = useState<
     Array<{ day: string; total: number; marketing: number; portal: number }>
@@ -135,25 +169,54 @@ const Dashboard = () => {
 
       const startIso = start.toISOString();
       const endExclusiveIso = addDays(startOfDay(end), 1).toISOString();
+      // Instantly API uses YYYY-MM-DD strings
+      const startDateStr = format(start, 'yyyy-MM-dd');
+      const endDateStr = format(end, 'yyyy-MM-dd');
 
       const days = eachDayOfInterval({ start, end });
 
       const sb = supabase as unknown as typeof supabase;
 
-      const [stagesRes, dealFlowRowsRes] = await Promise.all([
+      const [stagesRes, dealFlowRowsRes, appUsersRes, ordersInRangeRes, instantlyOverview] = await Promise.all([
         sb
           .from('portal_stages')
           .select('id,key,label,pipeline')
           .in('pipeline', ['cold_call_pipeline', 'lawyer_portal']),
+        // Keep null-email records — use or(is.null, not.ilike) so NULL rows are not excluded
         sb
           .from('lawyer_leads')
           .select('created_at,pipeline_name')
           .gte('created_at', startIso)
           .lt('created_at', endExclusiveIso)
+          .or('email.is.null,email.not.ilike.test@%')
+          .or('email.is.null,email.not.ilike.%@example.com')
+          .or('email.is.null,email.neq.test@accidentpayments.com')
           .order('created_at', { ascending: true }),
+        // Fetch all lawyers for inactive/active calculations
+        sb
+          .from('app_users')
+          .select('user_id,email,display_name')
+          .eq('role', 'lawyer'),
+        // Orders in selected date range (used for both active + inactive lawyers)
+        sb
+          .from('orders')
+          .select('lawyer_id')
+          .gte('created_at', startIso)
+          .lt('created_at', endExclusiveIso),
+        // Instantly AI: campaign analytics overview for Output + Interested/Connected stats
+        fetchInstantlyOverview(startDateStr, endDateStr),
       ]);
 
       if (cancelled) return;
+
+      if (stagesRes.error) {
+        // eslint-disable-next-line no-console
+        console.error('[manager-dashboard] portal_stages query error', stagesRes.error);
+      }
+      if (dealFlowRowsRes.error) {
+        // eslint-disable-next-line no-console
+        console.error('[manager-dashboard] lawyer_leads trend query error', dealFlowRowsRes.error);
+      }
 
       const stages = (stagesRes.data ?? []) as Array<{
         id: string;
@@ -162,15 +225,18 @@ const Dashboard = () => {
         pipeline: string;
       }>;
 
-      const countLawyerLeadsByStageIds = async (stageIds: string[]): Promise<number> => {
-        if (!stageIds.length) return 0;
+      const countLawyerLeadsByStageTokens = async (stageTokens: string[]): Promise<number> => {
+        if (!stageTokens.length) return 0;
 
         const res = await sb
           .from('lawyer_leads')
           .select('id', { count: 'exact', head: true })
-          .in('stage_id', stageIds)
+          .in('stage_id', stageTokens)
           .gte('created_at', startIso)
-          .lt('created_at', endExclusiveIso);
+          .lt('created_at', endExclusiveIso)
+          .or('email.is.null,email.not.ilike.test@%')
+          .or('email.is.null,email.not.ilike.%@example.com')
+          .or('email.is.null,email.neq.test@accidentpayments.com');
 
         return (res?.count ?? 0) as number;
       };
@@ -179,7 +245,7 @@ const Dashboard = () => {
       const fingerprint = (value: string | null | undefined) =>
         normalize(value).replace(/[^a-z0-9]+/g, '');
 
-      const stageIdsFor = (opts: {
+      const stageTokensFor = (opts: {
         pipeline: string;
         keys?: string[];
         labels?: string[];
@@ -200,78 +266,80 @@ const Dashboard = () => {
             if (labels.length && matches(label, labels)) return true;
             return false;
           })
-          .map((s) => s.id);
+          .flatMap((s) => [s.id, s.key])
+          .filter(Boolean);
       };
 
-      const outputStageIds = stageIdsFor({
+      // Output and Interested/Connected come from Instantly AI (see below)
+
+      const scheduledStageTokens = stageTokensFor({
         pipeline: 'cold_call_pipeline',
-        keys: ['output_state', 'output'],
-        labels: ['output state', 'output'],
+        keys: ['scheduled_for_zoom'],
+        labels: ['scheduled for zoom'],
       });
 
-      const interestedConnectedStageIds = stageIdsFor({
-        pipeline: 'cold_call_pipeline',
-        keys: ['interested_connected', 'interestedconnected', 'interested/connected'],
-        labels: ['interested/connected', 'interested connected'],
-      });
-
-      const scheduledStageIds = stages
-        .filter((s) => s.pipeline === 'cold_call_pipeline')
-        .filter((s) => s.key === 'scheduled_for_zoom')
-        .map((s) => s.id);
-
-      const ranMeetingStageIds = stageIdsFor({
+      const ranMeetingStageTokens = stageTokensFor({
         pipeline: 'cold_call_pipeline',
         keys: ['ran_meeting', 'meeting_ran', 'ran_zoom'],
         labels: ['ran meeting'],
       });
 
-      const signedStageIds = stages
-        .filter((s) => s.pipeline === 'lawyer_portal')
-        .filter((s) => s.key === 'retainer_signed')
-        .map((s) => s.id);
+      const signedStageTokens = stageTokensFor({
+        pipeline: 'lawyer_portal',
+        keys: ['retainer_signed'],
+        labels: ['retainer signed'],
+      });
 
-      const activeStageIds = stages
-        .filter((s) => s.pipeline === 'lawyer_portal')
-        .filter((s) => s.key.startsWith('active'))
-        .map((s) => s.id);
+      // Output = unique human replies from Instantly; Interested/Connected = leads marked interested
+      const output = instantlyOverview?.reply_count_unique ?? 0;
+      const interestedConnected = instantlyOverview?.total_interested ?? 0;
 
-      const [output, interestedConnected, scheduledMeetings, ranMeeting, signedAgreements] =
+      const [scheduledMeetings, ranMeeting, signedAgreements] =
         await Promise.all([
-          countLawyerLeadsByStageIds(outputStageIds),
-          countLawyerLeadsByStageIds(interestedConnectedStageIds),
-          countLawyerLeadsByStageIds(scheduledStageIds),
-          countLawyerLeadsByStageIds(ranMeetingStageIds),
-          countLawyerLeadsByStageIds(signedStageIds),
+          countLawyerLeadsByStageTokens(scheduledStageTokens),
+          countLawyerLeadsByStageTokens(ranMeetingStageTokens),
+          countLawyerLeadsByStageTokens(signedStageTokens),
         ]);
 
       if (cancelled) return;
 
-      // Onboarding stat: total leads in the lawyer leads table
       let opportunities = 0;
       try {
         const leadsRes = await sb
           .from('lawyer_leads')
-          .select('id', { count: 'exact', head: true });
+          .select('id', { count: 'exact', head: true })
+          .gte('created_at', startIso)
+          .lt('created_at', endExclusiveIso)
+          .or('email.is.null,email.not.ilike.test@%')
+          .or('email.is.null,email.not.ilike.%@example.com')
+          .or('email.is.null,email.neq.test@accidentpayments.com');
         opportunities = (leadsRes?.count ?? 0) as number;
       } catch (e) {
         console.warn('Failed to fetch lawyer_leads count', e);
       }
 
-      // Active Lawyers: distinct lawyers who created orders in the selected range
-      let activeLawyers = 0;
-      try {
-        const ordersRes = await sb
-          .from('orders')
-          .select('lawyer_id')
-          .gte('created_at', startIso)
-          .lt('created_at', endExclusiveIso);
-        const orderRows = (ordersRes?.data ?? []) as Array<{ lawyer_id: string }>;
-        const uniqueLawyers = new Set(orderRows.map((r) => r.lawyer_id).filter(Boolean));
-        activeLawyers = uniqueLawyers.size;
-      } catch (e) {
-        console.warn('Failed to fetch active lawyers from orders', e);
-      }
+      // Build test/real lawyer ID sets from app_users for active + inactive calculations
+      const lawyerUsers = (appUsersRes?.data ?? []) as unknown as Array<{
+        user_id: string;
+        email: string | null;
+        display_name: string | null;
+      }>;
+      const testLawyerIds = new Set(
+        lawyerUsers.filter((u) => isTestUser(u.email, u.display_name)).map((u) => u.user_id).filter(Boolean)
+      );
+      const realLawyerIds = new Set(
+        lawyerUsers.filter((u) => !isTestUser(u.email, u.display_name)).map((u) => u.user_id).filter(Boolean)
+      );
+
+      // Active lawyers: placed at least one order in the selected date range (excluding test accounts)
+      const orderRows = (ordersInRangeRes?.data ?? []) as unknown as Array<{ lawyer_id: string }>;
+      const activeInRangeIds = new Set(
+        orderRows.map((r) => r.lawyer_id).filter((id) => id && !testLawyerIds.has(id))
+      );
+      const activeLawyers = activeInRangeIds.size;
+
+      // Inactive lawyers: real lawyers with an account who placed NO order in the selected date range
+      const inactiveLawyers = Array.from(realLawyerIds).filter((id) => !activeInRangeIds.has(id)).length;
 
       setStats({
         output,
@@ -280,6 +348,7 @@ const Dashboard = () => {
         ranMeeting,
         signedAgreements,
         activeLawyers,
+        inactiveLawyers,
         opportunities,
       });
 
@@ -341,128 +410,141 @@ const Dashboard = () => {
     []
   );
 
+  const toggleStat = (key: StatCardKey) => {
+    setVisibleStats((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  };
+
+  const visibleCards = ALL_STAT_CARDS.filter((c) => visibleStats.includes(c.key));
+
+  const statPickerLabel =
+    visibleStats.length === ALL_STAT_KEYS.length
+      ? 'All Stats'
+      : visibleStats.length === 0
+        ? 'No Stats'
+        : `${visibleStats.length} Stats`;
+
   return (
     <div className="container mx-auto px-4 py-8 space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Output</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-semibold">{stats.output}</div>
-          </CardContent>
-        </Card>
+      {/* Filter Bar */}
+      <div className="flex flex-wrap items-center gap-2">
+        {/* Date Range */}
+        <div className="flex items-center gap-2">
+          <Select
+            value={timeRange}
+            onValueChange={(v) => {
+              const next = v as DashboardTimeRange;
+              if (next === 'custom' && timeRange !== 'custom') {
+                const bounds = getPresetRangeBounds(timeRange as PresetTimeRange);
+                setCustomStartDate(format(bounds.start, 'yyyy-MM-dd'));
+                setCustomEndDate(format(bounds.end, 'yyyy-MM-dd'));
+              }
+              setTimeRange(next);
+            }}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="this_week">This Week</SelectItem>
+                <SelectItem value="last_week">Last Week</SelectItem>
+                <SelectItem value="this_month">This Month</SelectItem>
+                <SelectItem value="last_month">Last Month</SelectItem>
+                <SelectItem value="custom">Custom</SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Interested/Connected</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-semibold">{stats.interestedConnected}</div>
-          </CardContent>
-        </Card>
+          {timeRange === 'custom' && (
+            <>
+              <span className="text-xs text-muted-foreground">From</span>
+              <Input
+                type="date"
+                className="w-36"
+                value={customStartDate}
+                max={customEndDate || undefined}
+                onChange={(e) => setCustomStartDate(e.target.value)}
+              />
+              <span className="text-xs text-muted-foreground">To</span>
+              <Input
+                type="date"
+                className="w-36"
+                value={customEndDate}
+                min={customStartDate || undefined}
+                onChange={(e) => setCustomEndDate(e.target.value)}
+              />
+            </>
+          )}
+        </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Scheduled Meetings</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-semibold">{stats.scheduledMeetings}</div>
-          </CardContent>
-        </Card>
+        <div className="h-6 w-px bg-border mx-1 hidden sm:block" />
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Ran Meeting</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-semibold">{stats.ranMeeting}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Signed Agreements</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-semibold">{stats.signedAgreements}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Opportunities</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-semibold">{stats.opportunities}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Active Lawyers</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-semibold">{stats.activeLawyers}</div>
-          </CardContent>
-        </Card>
+        {/* Stat Card Picker */}
+        <Popover open={statPickerOpen} onOpenChange={setStatPickerOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="gap-2">
+              {statPickerLabel}
+              <ChevronDown className="h-4 w-4 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-52 p-2" align="start">
+            <div className="space-y-1">
+              {/* Select All / Clear */}
+              <div className="flex items-center justify-between px-2 py-1 mb-1 border-b">
+                <span className="text-xs font-medium text-muted-foreground">Stat Cards</span>
+                <button
+                  className="text-xs text-primary hover:underline"
+                  onClick={() =>
+                    setVisibleStats(
+                      visibleStats.length === ALL_STAT_KEYS.length ? [] : [...ALL_STAT_KEYS]
+                    )
+                  }
+                >
+                  {visibleStats.length === ALL_STAT_KEYS.length ? 'Clear all' : 'Select all'}
+                </button>
+              </div>
+              {ALL_STAT_CARDS.map((card) => (
+                <label
+                  key={card.key}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer"
+                >
+                  <Checkbox
+                    checked={visibleStats.includes(card.key)}
+                    onCheckedChange={() => toggleStat(card.key)}
+                  />
+                  <span className="text-sm">{card.label}</span>
+                </label>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <CardTitle className="text-sm">Lawyer Onboarding Stats ({getRangeLabel(timeRange)})</CardTitle>
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-            <Select
-              value={timeRange}
-              onValueChange={(v) => {
-                const next = v as DashboardTimeRange;
-                if (next === 'custom' && timeRange !== 'custom') {
-                  const bounds = getPresetRangeBounds(timeRange as PresetTimeRange);
-                  setCustomStartDate(format(bounds.start, 'yyyy-MM-dd'));
-                  setCustomEndDate(format(bounds.end, 'yyyy-MM-dd'));
-                }
-                setTimeRange(next);
-              }}
-            >
-              <SelectTrigger className="w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value="this_week">This Week</SelectItem>
-                  <SelectItem value="last_week">Last Week</SelectItem>
-                  <SelectItem value="this_month">This Month</SelectItem>
-                  <SelectItem value="last_month">Last Month</SelectItem>
-                  <SelectItem value="custom">Custom</SelectItem>
-                </SelectGroup>
-              </SelectContent>
-            </Select>
+      {/* Stat Cards */}
+      {visibleCards.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {visibleCards.map((card) => (
+            <Card key={card.key}>
+              <CardHeader>
+                <CardTitle className="text-sm">{card.label}</CardTitle>
+                {card.subtitle && (
+                  <p className="text-xs text-muted-foreground">{card.subtitle}</p>
+                )}
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-semibold">{stats[card.key]}</div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
-            {timeRange === 'custom' && (
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">Start</span>
-                  <Input
-                    type="date"
-                    className="w-40"
-                    value={customStartDate}
-                    max={customEndDate || undefined}
-                    onChange={(e) => setCustomStartDate(e.target.value)}
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">End</span>
-                  <Input
-                    type="date"
-                    className="w-40"
-                    value={customEndDate}
-                    min={customStartDate || undefined}
-                    onChange={(e) => setCustomEndDate(e.target.value)}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
+      {/* Chart */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">Lawyer Onboarding Stats ({getRangeLabel(timeRange)})</CardTitle>
         </CardHeader>
         <CardContent>
           <ChartContainer config={chartConfig} className="h-[320px] w-full">
@@ -473,6 +555,13 @@ const Dashboard = () => {
                 tickLine={false}
                 axisLine={false}
                 tickMargin={8}
+              />
+              <YAxis
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                allowDecimals={false}
+                width={30}
               />
               <ChartTooltip content={<ChartTooltipContent />} />
               <ChartLegend content={<ChartLegendContent />} />

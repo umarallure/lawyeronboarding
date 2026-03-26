@@ -55,7 +55,7 @@ Implemented a comprehensive callback request system that allows BPO centers to r
   - Carrier
   - Coverage Amount
   - Monthly Premium
-  - Created Date
+  - Date
   - Submission Date
   - Lead Vendor
   

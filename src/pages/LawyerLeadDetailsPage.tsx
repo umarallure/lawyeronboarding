@@ -127,12 +127,21 @@ const LawyerLeadDetailsPage = () => {
 
     if (!pipelineChanged) return;
 
-    const firstStageKey = stages[0]?.key;
+    const firstStageKey = stages[0]?.key ?? null;
     setForm((prev) => {
       if (!prev) return prev;
+
+      const currentStageId = (prev.stage_id || '').trim();
+      const hasValidStage =
+        Boolean(currentStageId) &&
+        stages.some((s) => s.key === currentStageId || s.id === currentStageId);
+
+      // Only default the stage if it's empty or invalid for the selected pipeline.
+      if (hasValidStage) return prev;
+
       return {
         ...prev,
-        stage_id: firstStageKey ?? null,
+        stage_id: firstStageKey,
       };
     });
   }, [pipelineName, stages, stagesLoading, form]);

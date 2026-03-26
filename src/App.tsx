@@ -83,7 +83,7 @@ const App = () => (
               path="/leads" 
               element={
                 <ProtectedRoute>
-                  <AppShell title="Lawyers">
+                  <AppShell title="Lawyer Contacts">
                     <Leads />
                   </AppShell>
                 </ProtectedRoute>
@@ -362,7 +362,7 @@ const App = () => (
               path="/transfer-portal" 
               element={
                 <ProtectedRoute>
-                  <AppShell title="Marketing Pipeline">
+                  <AppShell title="Marketing Opportunitues">
                     <TransferPortalPage />
                   </AppShell>
                 </ProtectedRoute>

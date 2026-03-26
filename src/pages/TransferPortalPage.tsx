@@ -25,8 +25,49 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useMarketingTeamFilterAccess } from "@/hooks/useMarketingTeamFilterAccess";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeftRight, Calendar, Loader2, Pencil, RefreshCw, Users, StickyNote, Plus, PhoneCall } from "lucide-react";
+import { ArrowLeftRight, Calendar, Loader2, Pencil, RefreshCw, Users, StickyNote, Plus, PhoneCall, SlidersHorizontal, X } from "lucide-react";
 import { usePipelineStages, type PipelineStage } from "@/hooks/usePipelineStages";
+import {
+  addDays,
+  endOfMonth,
+  endOfWeek,
+  parseISO,
+  startOfDay,
+  startOfMonth,
+  startOfWeek,
+  subMonths,
+  subWeeks,
+} from "date-fns";
+
+type DateRange = "all_time" | "this_week" | "last_week" | "this_month" | "last_month" | "custom";
+type PresetDateRange = Exclude<DateRange, "all_time" | "custom">;
+
+const getPresetRangeBounds = (range: PresetDateRange) => {
+  const now = new Date();
+  if (range === "this_week") {
+    const start = startOfWeek(now, { weekStartsOn: 1 });
+    const end = endOfWeek(now, { weekStartsOn: 1 });
+    return { start, end };
+  }
+
+  if (range === "last_week") {
+    const ref = subWeeks(now, 1);
+    const start = startOfWeek(ref, { weekStartsOn: 1 });
+    const end = endOfWeek(ref, { weekStartsOn: 1 });
+    return { start, end };
+  }
+
+  if (range === "this_month") {
+    const start = startOfMonth(now);
+    const end = endOfMonth(now);
+    return { start, end };
+  }
+
+  const ref = subMonths(now, 1);
+  const start = startOfMonth(ref);
+  const end = endOfMonth(ref);
+  return { start, end };
+};
 
 type UntypedSb = {
   from: (table: string) => {
@@ -42,13 +83,13 @@ type UntypedSb = {
 
 export interface TransferPortalRow {
   id: string;
+  ui_id?: string;
   submission_id: string;
   user_id?: string;
   assigned_user_id?: string | null;
   pipeline_name?: string;
   stage_id?: string;
   display_stage_key?: string;
-  marketing_source_stage?: string | null;
   submission_date?: string;
   lawyer_full_name?: string;
   firm_name?: string;
@@ -106,14 +147,23 @@ const TransferPortalPage = () => {
 
     const scheduledForOnboarding = dbTransferStages
       .filter((s) => {
-        const key = normalize(s.key);
-        const label = normalize(s.label);
-        return (key.includes("scheduled") && key.includes("onboard")) || (label.includes("scheduled") && label.includes("onboard"));
+        const key = fingerprint(s.key);
+        const label = fingerprint(s.label);
+        return key.includes("scheduled") && key.includes("onboard")
+          || label.includes("scheduled") && label.includes("onboard");
       })
       .map((s) => s.key);
 
-    return { contacted, scheduledForZoom, scheduledForOnboarding };
+    return {
+      contacted,
+      scheduledForZoom,
+      scheduledForOnboarding,
+    };
   }, [dbTransferStages, fingerprint, normalize]);
+
+  const scheduledForOnboardingStageKey = useMemo(() => {
+    return stageKeySets.scheduledForOnboarding[0] ?? null;
+  }, [stageKeySets.scheduledForOnboarding]);
 
   const stageTheme = useMemo(() => {
     const theme: Record<string, { column: string }> = {};
@@ -123,9 +173,6 @@ const TransferPortalPage = () => {
     return theme;
   }, [dbTransferStages]);
 
-  const allStageOptions = useMemo(() => {
-    return Array.from(new Set(kanbanStages.map((s) => s.label).map((label) => label.trim()).filter(Boolean)));
-  }, [kanbanStages]);
 
   const scheduledMarketingStage = useMemo(() => {
     return (
@@ -226,6 +273,10 @@ const TransferPortalPage = () => {
   const itemsPerPage = 50;
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   const [selectedStage, setSelectedStage] = useState<"all" | string>("all");
+  const [timeRange, setTimeRange] = useState<DateRange>("all_time");
+  const [customStartDate, setCustomStartDate] = useState<string>("");
+  const [customEndDate, setCustomEndDate] = useState<string>("");
+  const [showFilterRow, setShowFilterRow] = useState(false);
 
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
@@ -240,9 +291,19 @@ const TransferPortalPage = () => {
   const [editOpen, setEditOpen] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [editRow, setEditRow] = useState<TransferPortalRow | null>(null);
+  const [editPipeline, setEditPipeline] = useState<string>("cold_call_pipeline");
   const [editStage, setEditStage] = useState<string>("");
   const [editNotes, setEditNotes] = useState<string>("");
   const [editStageOpen, setEditStageOpen] = useState(false);
+
+  const editPipelineStages = useMemo(() => {
+    if (editPipeline === 'lawyer_portal') return dbSubmissionStages;
+    return dbTransferStages;
+  }, [editPipeline, dbTransferStages, dbSubmissionStages]);
+
+  const editPipelineStageOptions = useMemo(() => {
+    return Array.from(new Set(editPipelineStages.map((s) => s.label).map((l) => l.trim()).filter(Boolean)));
+  }, [editPipelineStages]);
 
   // Remove duplicates based on lawyer_full_name and phone_number
   const removeDuplicates = useCallback((records: TransferPortalRow[]): TransferPortalRow[] => {
@@ -308,29 +369,64 @@ const TransferPortalPage = () => {
         setRefreshing(true);
 
         type QueryRes = { data: unknown[] | null; error: { message?: string } | null };
+        type LeadsQuery = PromiseLike<QueryRes> & {
+          gte: (column: string, value: string) => LeadsQuery;
+          lt: (column: string, value: string) => LeadsQuery;
+          order: (column: string, opts: { ascending: boolean }) => LeadsQuery;
+        };
 
-        const lawyerLeadsQuery = supabase as unknown as {
+        const sb = supabase as unknown as {
           from: (table: string) => {
             select: (columns: string) => {
-              eq: (column: string, value: string) => {
-                order: (column: string, options: { ascending: boolean }) => Promise<QueryRes>;
-              };
+              eq: (column: string, value: string) => LeadsQuery;
             };
           };
         };
 
-        const [transfersRes, lawyerPortalRes] = await Promise.all([
-          lawyerLeadsQuery
-            .from('lawyer_leads')
-            .select('*')
-            .eq('pipeline_name', 'cold_call_pipeline')
-            .order('created_at', { ascending: false }),
-          lawyerLeadsQuery
-            .from('lawyer_leads')
-            .select('*')
-            .eq('pipeline_name', 'lawyer_portal')
-            .order('created_at', { ascending: false }),
-        ]);
+        const resolveDateRange = (): { startIso: string; endExclusiveIso: string } | null => {
+          if (timeRange === "all_time") return null;
+
+          let start: Date;
+          let end: Date;
+
+          if (timeRange === "custom") {
+            if (!customStartDate || !customEndDate) return null;
+            start = startOfDay(parseISO(customStartDate));
+            end = startOfDay(parseISO(customEndDate));
+            if (end < start) end = start;
+          } else {
+            const bounds = getPresetRangeBounds(timeRange as PresetDateRange);
+            start = bounds.start;
+            end = bounds.end;
+          }
+
+          const startIso = start.toISOString();
+          const endExclusiveIso = addDays(startOfDay(end), 1).toISOString();
+          return { startIso, endExclusiveIso };
+        };
+
+        const range = resolveDateRange();
+
+        let transfersQ = sb
+          .from("lawyer_leads")
+          .select("*")
+          .eq("pipeline_name", "cold_call_pipeline");
+
+        let portalQ = sb
+          .from("lawyer_leads")
+          .select("*")
+          .eq("pipeline_name", "lawyer_portal");
+
+        if (range) {
+          transfersQ = transfersQ.gte("created_at", range.startIso).lt("created_at", range.endExclusiveIso);
+          portalQ = portalQ.gte("created_at", range.startIso).lt("created_at", range.endExclusiveIso);
+        }
+
+        transfersQ = transfersQ.order("created_at", { ascending: false });
+
+        portalQ = portalQ.order("created_at", { ascending: false });
+
+        const [transfersRes, portalRes] = await Promise.all([transfersQ, portalQ]);
 
         if (transfersRes.error) {
           console.error("Error fetching contacts data:", transfersRes.error);
@@ -342,27 +438,20 @@ const TransferPortalPage = () => {
           return;
         }
 
-        if (lawyerPortalRes.error) {
-          console.error("Error fetching lawyer portal overlay data:", lawyerPortalRes.error);
-          toast({
-            title: "Error",
-            description: "Failed to fetch contacts data",
-            variant: "destructive",
-          });
-          return;
-        }
-
         const transferRows = ((transfersRes.data ?? []) as unknown as TransferPortalRow[]);
-        const lawyerPortalRows = ((lawyerPortalRes.data ?? []) as unknown as TransferPortalRow[]);
-        const overlayRows = lawyerPortalRows
-          .filter((row) => {
-            const marketingStageKey = resolveMarketingStageKey(row.marketing_source_stage);
-            return Boolean(marketingStageKey) || readyToMoveForwardStageIds.has((row.stage_id || '').trim());
-          })
-          .map((row) => ({
-            ...row,
-            display_stage_key: resolveMarketingStageKey(row.marketing_source_stage) || scheduledMarketingStage?.key,
-          }));
+
+        const portalRows = ((portalRes.data ?? []) as unknown as TransferPortalRow[]);
+        const overlayRows: TransferPortalRow[] =
+          scheduledForOnboardingStageKey
+            ? portalRows
+                .filter((row) => readyToMoveForwardStageIds.has((row.stage_id || '').trim()))
+                .map((row) => ({
+                  ...row,
+                  ui_id: `${row.id}:overlay:scheduled_onboarding`,
+                  display_stage_key: scheduledForOnboardingStageKey,
+                }))
+            : [];
+
         const combinedRows = [...transferRows, ...overlayRows];
 
         setData(combinedRows);
@@ -388,7 +477,7 @@ const TransferPortalPage = () => {
         setRefreshing(false);
       }
     },
-    [readyToMoveForwardStageIds, resolveMarketingStageKey, scheduledMarketingStage?.key, toast]
+    [customEndDate, customStartDate, readyToMoveForwardStageIds, scheduledForOnboardingStageKey, timeRange, toast]
   );
 
   // Update filtered data whenever data or filters change
@@ -403,15 +492,50 @@ const TransferPortalPage = () => {
     return filteredData.filter((row) => deriveStageKey(row) === selectedStage);
   }, [filteredData, selectedStage, deriveStageKey]);
 
+  const defaultAssigneeFilter = canViewTeamAssigneeFilter ? "all" : (user?.id || "all");
+  const hasActiveFilters =
+    searchTerm.trim().length > 0 ||
+    selectedStage !== "all" ||
+    assigneeFilter !== defaultAssigneeFilter ||
+    timeRange !== "all_time" ||
+    customStartDate.length > 0 ||
+    customEndDate.length > 0;
+
+  const handleClearFilters = () => {
+    setSearchTerm("");
+    setSelectedStage("all");
+    setAssigneeFilter(defaultAssigneeFilter);
+    setTimeRange("all_time");
+    setCustomStartDate("");
+    setCustomEndDate("");
+    setCurrentPage(1);
+    setShowFilterRow(false);
+  };
+
+  const filteredLeadsByStage = useMemo(() => {
+    const grouped = new Map<string, TransferPortalRow[]>();
+    kanbanStages.forEach((stage) => grouped.set(stage.key, []));
+    filteredData.forEach((row) => {
+      const stageKey = deriveStageKey(row);
+      grouped.get(stageKey)?.push(row);
+    });
+    return grouped;
+  }, [filteredData, kanbanStages, deriveStageKey]);
+
   const marketingPipelineStats = useMemo(() => {
     const totalContacts = filteredData.length;
-    const contactedCount = filteredData.filter((row) => stageKeySets.contacted.includes(deriveStageKey(row))).length;
-    const scheduledForZoomCount = filteredData.filter((row) =>
-      stageKeySets.scheduledForZoom.includes(deriveStageKey(row))
-    ).length;
-    const scheduledForOnboardingCount = filteredData.filter((row) =>
-      stageKeySets.scheduledForOnboarding.includes(deriveStageKey(row))
-    ).length;
+    const contactedCount = stageKeySets.contacted.reduce(
+      (sum, stageKey) => sum + (filteredLeadsByStage.get(stageKey)?.length || 0),
+      0
+    );
+    const scheduledForZoomCount = stageKeySets.scheduledForZoom.reduce(
+      (sum, stageKey) => sum + (filteredLeadsByStage.get(stageKey)?.length || 0),
+      0
+    );
+    const scheduledForOnboardingCount = stageKeySets.scheduledForOnboarding.reduce(
+      (sum, stageKey) => sum + (filteredLeadsByStage.get(stageKey)?.length || 0),
+      0
+    );
 
     return {
       totalContacts,
@@ -419,7 +543,7 @@ const TransferPortalPage = () => {
       scheduledForZoomCount,
       scheduledForOnboardingCount,
     };
-  }, [filteredData, deriveStageKey, stageKeySets]);
+  }, [filteredData, filteredLeadsByStage, stageKeySets]);
 
   const totalPages = Math.max(1, Math.ceil(stageFilteredData.length / itemsPerPage));
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -428,10 +552,13 @@ const TransferPortalPage = () => {
 
 
   const handleOpenEdit = (row: TransferPortalRow) => {
+    const pipeline = row.pipeline_name || 'cold_call_pipeline';
     setEditRow(row);
+    setEditPipeline(pipeline);
     const currentStageId = row.display_stage_key || row.stage_id;
-    const currentStage = dbTransferStages.find((s) => s.key === currentStageId) ?? dbTransferStages.find((s) => s.id === currentStageId);
-    setEditStage(currentStage?.label || kanbanStages[0].label);
+    const stagePool = pipeline === 'lawyer_portal' ? dbSubmissionStages : dbTransferStages;
+    const currentStage = stagePool.find((s) => s.key === currentStageId) ?? stagePool.find((s) => s.id === currentStageId);
+    setEditStage(currentStage?.label || '');
     setEditNotes('');
     setEditStageOpen(false);
     setEditOpen(true);
@@ -446,9 +573,9 @@ const TransferPortalPage = () => {
 
   const editStageMatches = useMemo(() => {
     const query = (editStage || '').trim().toLowerCase();
-    if (!query) return allStageOptions;
-    return allStageOptions.filter((label) => label.toLowerCase().includes(query));
-  }, [allStageOptions, editStage]);
+    if (!query) return editPipelineStageOptions;
+    return editPipelineStageOptions.filter((label) => label.toLowerCase().includes(query));
+  }, [editPipelineStageOptions, editStage]);
 
   const handleSaveEdit = async () => {
     if (!editRow) return;
@@ -456,22 +583,18 @@ const TransferPortalPage = () => {
     const nextStageLabel = normalizeSubmissionTransitionStatus((editStage || '').trim());
     if (!nextStageLabel) return;
 
-    const nextStage = dbTransferStages.find(s => s.label === nextStageLabel);
+    const nextStage = editPipelineStages.find(s => s.label === nextStageLabel);
     if (!nextStage) return;
 
-    const previousStageId = editRow.display_stage_key || editRow.marketing_source_stage || editRow.stage_id || '';
-    const stageChanged = previousStageId !== nextStage.key;
+    const previousStageId = editRow.display_stage_key || editRow.stage_id || '';
+    const stageChanged = previousStageId !== nextStage.key || (editRow.pipeline_name || 'cold_call_pipeline') !== editPipeline;
 
     try {
       setEditSaving(true);
 
-      const isLawyerPortalRow = editRow.pipeline_name === 'lawyer_portal';
-      const isLastStage = dbTransferStages.length > 0 && 
-                          nextStage.display_order === Math.max(...dbTransferStages.map(s => s.display_order));
-
       const lawyerLeadsUpdate = supabase as unknown as {
         from: (table: string) => {
-          update: (data: { stage_id?: string; additional_notes: string; pipeline_name?: string; marketing_source_stage?: string | null }) => {
+          update: (data: { stage_id?: string; additional_notes: string; pipeline_name?: string }) => {
             eq: (column: string, value: string) => Promise<{ error: unknown }>;
           };
         };
@@ -481,25 +604,11 @@ const TransferPortalPage = () => {
         stage_id?: string;
         additional_notes: string;
         pipeline_name?: string;
-        marketing_source_stage?: string | null;
-      } = isLawyerPortalRow
-        ? isLastStage
-          ? {
-              additional_notes: editNotes,
-              marketing_source_stage: nextStage.key,
-            }
-          : {
-              stage_id: nextStage.key,
-              additional_notes: editNotes,
-              pipeline_name: 'cold_call_pipeline',
-              marketing_source_stage: null,
-            }
-        : {
-            stage_id: isLastStage ? readyToMoveForwardStageKey : nextStage.key,
-            additional_notes: editNotes,
-            marketing_source_stage: nextStage.key,
-            ...(isLastStage ? { pipeline_name: 'lawyer_portal' } : {}),
-          };
+      } = {
+        stage_id: nextStage.key,
+        additional_notes: editNotes,
+        pipeline_name: editPipeline,
+      };
 
       const { error } = await lawyerLeadsUpdate
           .from('lawyer_leads')
@@ -582,55 +691,27 @@ const TransferPortalPage = () => {
         }
       }
 
-      if (!isLawyerPortalRow && isLastStage) {
-        setEditOpen(false);
-        setEditRow(null);
+      setData((prev) =>
+        prev.map((row) =>
+          row.id === editRow.id
+            ? {
+                ...row,
+                stage_id: nextStage.key,
+                display_stage_key: nextStage.key,
+                pipeline_name: editPipeline,
+                additional_notes: editNotes,
+              }
+            : row
+        )
+      );
 
-        toast({
-          title: 'Saved',
-          description: 'Lead transitioned to Lawyer Portal - Ready to Move Forward',
-        });
+      setEditOpen(false);
+      setEditRow(null);
 
-        setTimeout(() => {
-          fetchData(false);
-        }, 500);
-      } else if (isLawyerPortalRow && !isLastStage) {
-        setEditOpen(false);
-        setEditRow(null);
-
-        toast({
-          title: 'Saved',
-          description: 'Lead moved back to the marketing pipeline',
-        });
-
-        setTimeout(() => {
-          fetchData(false);
-        }, 500);
-      } else {
-        setData((prev) =>
-          prev.map((row) =>
-            row.id === editRow.id
-              ? {
-                  ...row,
-                  stage_id: isLawyerPortalRow ? row.stage_id : nextStage.key,
-                  display_stage_key: nextStage.key,
-                  marketing_source_stage: isLawyerPortalRow ? nextStage.key : nextStage.key,
-                  additional_notes: editNotes,
-                }
-              : row
-          )
-        );
-
-        setEditOpen(false);
-        setEditRow(null);
-
-        toast({
-          title: 'Saved',
-          description: isLawyerPortalRow
-            ? 'Marketing column updated successfully'
-            : 'Contact updated successfully',
-        });
-      }
+      toast({
+        title: 'Saved',
+        description: 'Contact updated successfully',
+      });
     } finally {
       setEditSaving(false);
     }
@@ -773,18 +854,15 @@ const TransferPortalPage = () => {
       r.id === rowId
         ? {
             ...r,
-            stage_id: row?.pipeline_name === 'lawyer_portal'
-              ? r.stage_id
-              : (stage.display_order === Math.max(...dbTransferStages.map(s => s.display_order))
-                  ? readyToMoveForwardStageKey
-                  : stage.key),
+            stage_id:
+              stage.display_order === Math.max(...dbTransferStages.map((s) => s.display_order))
+                ? readyToMoveForwardStageKey
+                : stage.key,
             display_stage_key: stage.key,
-            marketing_source_stage: stage.key,
-            pipeline_name: row?.pipeline_name === 'lawyer_portal'
-              ? r.pipeline_name
-              : (stage.display_order === Math.max(...dbTransferStages.map(s => s.display_order))
-                  ? 'lawyer_portal'
-                  : r.pipeline_name),
+            pipeline_name:
+              stage.display_order === Math.max(...dbTransferStages.map((s) => s.display_order))
+                ? 'lawyer_portal'
+                : 'cold_call_pipeline',
           }
         : r
     );
@@ -796,59 +874,18 @@ const TransferPortalPage = () => {
 
       const lawyerLeadsUpdate = supabase as unknown as {
         from: (table: string) => {
-          update: (data: { stage_id?: string; pipeline_name?: string; marketing_source_stage?: string | null }) => {
+          update: (data: { stage_id?: string; pipeline_name?: string }) => {
             eq: (column: string, value: string) => Promise<{ error: unknown }>;
           };
         };
       };
 
-      if (row?.pipeline_name === 'lawyer_portal' && !isLastStage) {
+      if (isLastStage) {
         const { error } = await lawyerLeadsUpdate
           .from('lawyer_leads')
           .update({
-            stage_id: stage.key,
-            pipeline_name: 'cold_call_pipeline',
-            marketing_source_stage: null,
-          })
-          .eq('id', rowId);
-
-        if (error) throw error;
-
-        toast({
-          title: 'Status Updated',
-          description: 'Lead moved back to the marketing pipeline',
-        });
-
-        setTimeout(() => {
-          fetchData(false);
-        }, 500);
-      } else if (row?.pipeline_name === 'lawyer_portal') {
-        const { error } = await lawyerLeadsUpdate
-          .from('lawyer_leads')
-          .update({ marketing_source_stage: stage.key })
-          .eq('id', rowId);
-
-        if (error) throw error;
-
-        toast({
-          title: 'Status Updated',
-          description: `Lead remains visible in "${stage.label}" on the marketing pipeline`,
-        });
-      } else if (isLastStage) {
-        const updatePayload = supabase as unknown as {
-          from: (table: string) => {
-            update: (data: { stage_id: string; pipeline_name: string; marketing_source_stage: string }) => {
-              eq: (column: string, value: string) => Promise<{ error: unknown }>;
-            };
-          };
-        };
-
-        const { error } = await updatePayload
-          .from('lawyer_leads')
-          .update({ 
             stage_id: readyToMoveForwardStageKey,
             pipeline_name: 'lawyer_portal',
-            marketing_source_stage: stage.key,
           })
           .eq('id', rowId);
 
@@ -865,7 +902,7 @@ const TransferPortalPage = () => {
       } else {
         const { error } = await lawyerLeadsUpdate
           .from('lawyer_leads')
-          .update({ stage_id: stage.key, marketing_source_stage: stage.key })
+          .update({ stage_id: stage.key, pipeline_name: 'cold_call_pipeline' })
           .eq('id', rowId);
 
         if (error) throw error;
@@ -998,64 +1035,189 @@ const TransferPortalPage = () => {
             </Card>
           </div>
 
-          <div className="overflow-x-auto">
-            <div className="flex flex-nowrap items-center justify-between gap-3 min-w-[1120px]">
-              <Input
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search contacts..."
-                className="w-56"
-              />
+          <div className="rounded-2xl border bg-card p-4 shadow-sm">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+              <div className="grid flex-1 gap-3 xl:grid-cols-[minmax(300px,1fr)_auto_auto]">
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Search</Label>
+                  <Input
+                    value={searchTerm}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    placeholder="Search contacts..."
+                    className="w-full"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant={showFilterRow ? "default" : "outline"}
+                  className="gap-2 xl:self-end"
+                  onClick={() => setShowFilterRow((prev) => !prev)}
+                >
+                  <SlidersHorizontal className="h-4 w-4" />
+                  Filter
+                </Button>
+                {hasActiveFilters ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="gap-2 xl:self-end"
+                    onClick={handleClearFilters}
+                  >
+                    <X className="h-4 w-4" />
+                    Clear
+                  </Button>
+                ) : (
+                  <div className="hidden xl:block" />
+                )}
+              </div>
 
-              <Select value={selectedStage} onValueChange={(value) => {
-                setSelectedStage(value);
-                setCurrentPage(1);
-              }}>
-                <SelectTrigger className="w-44">
-                  <SelectValue placeholder="All Stages" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="all">All Stages</SelectItem>
-                    {kanbanStages.map((stage) => (
-                      <SelectItem key={stage.key} value={stage.key}>
-                        {stage.label}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
+              <div className="flex flex-wrap items-center gap-3">
+                <Badge variant="secondary" className="px-2.5 py-1 shrink-0">
+                  {stageFilteredData.length} contacts
+                </Badge>
+                <Button variant="outline" size="sm" onClick={handleExport}>
+                  Export CSV
+                </Button>
+                <Button size="sm" onClick={handleRefresh} disabled={refreshing}>
+                  <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+                  Refresh
+                </Button>
+                <Button size="sm" onClick={() => navigate('/add-lead')} variant="default">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Lawyer
+                </Button>
+              </div>
+            </div>
 
-              <Select
-                value={assigneeFilter}
-                onValueChange={(value) => {
-                  setAssigneeFilter(value);
-                  setCurrentPage(1);
-                }}
-              >
-                <SelectTrigger className="w-44">
-                  <SelectValue placeholder="Assignee" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="all">All Leads</SelectItem>
-                    {user?.id ? <SelectItem value={user.id}>My Leads</SelectItem> : null}
-                    {marketingTeam
-                      .filter((m) => m.user_id !== user?.id)
-                      .map((m) => (
-                      <SelectItem key={m.user_id} value={m.user_id}>
-                        {m.display_name}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-              <div className="inline-flex rounded-lg border border-muted bg-background p-0.5 shrink-0">
+            {showFilterRow && (
+              <div className="mt-4 border-t pt-4">
+                <div className="grid gap-3 xl:grid-cols-[repeat(3,minmax(180px,1fr))]">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Stage</Label>
+                    <Select value={selectedStage} onValueChange={(value) => {
+                      setSelectedStage(value);
+                      setCurrentPage(1);
+                    }}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="All Stages" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectItem value="all">All Stages</SelectItem>
+                          {kanbanStages.map((stage) => (
+                            <SelectItem key={stage.key} value={stage.key}>
+                              {stage.label}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Assignee</Label>
+                    <Select
+                      value={assigneeFilter}
+                      onValueChange={(value) => {
+                        setAssigneeFilter(value);
+                        setCurrentPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Assignee" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectItem value="all">All Leads</SelectItem>
+                          {user?.id ? <SelectItem value={user.id}>My Leads</SelectItem> : null}
+                          {marketingTeam
+                            .filter((m) => m.user_id !== user?.id)
+                            .map((m) => (
+                            <SelectItem key={m.user_id} value={m.user_id}>
+                              {m.display_name}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Date</Label>
+                    <Select
+                      value={timeRange}
+                      onValueChange={(v) => {
+                        const next = v as DateRange;
+                        if (next === "custom" && timeRange !== "custom") {
+                          const seed: PresetDateRange = timeRange === "all_time" ? "this_month" : (timeRange as PresetDateRange);
+                          const bounds = getPresetRangeBounds(seed);
+                          setCustomStartDate(bounds.start.toISOString().slice(0, 10));
+                          setCustomEndDate(bounds.end.toISOString().slice(0, 10));
+                        }
+                        setTimeRange(next);
+                        setCurrentPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="All Time" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectItem value="all_time">All Time</SelectItem>
+                          <SelectItem value="this_week">This Week</SelectItem>
+                          <SelectItem value="last_week">Last Week</SelectItem>
+                          <SelectItem value="this_month">This Month</SelectItem>
+                          <SelectItem value="last_month">Last Month</SelectItem>
+                          <SelectItem value="custom">Custom</SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {timeRange === "custom" && (
+                  <div className="mt-2 grid grid-cols-2 gap-4 max-w-[360px]">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Start Date</Label>
+                      <Input
+                        type="date"
+                        className="w-full pr-10 tabular-nums"
+                        value={customStartDate}
+                        max={customEndDate || undefined}
+                        onChange={(e) => {
+                          setCustomStartDate(e.target.value);
+                          setCurrentPage(1);
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">End Date</Label>
+                      <Input
+                        type="date"
+                        className="w-full pr-10 tabular-nums"
+                        value={customEndDate}
+                        min={customStartDate || undefined}
+                        onChange={(e) => {
+                          setCustomEndDate(e.target.value);
+                          setCurrentPage(1);
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="mt-2 flex flex-col gap-3 border-t pt-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="inline-flex w-full rounded-lg border border-muted bg-background p-0.5 xl:w-auto">
                 {["kanban", "list"].map((mode) => (
                   <button
                     key={mode}
                     type="button"
-                    className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                    className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition xl:flex-none ${
                       viewMode === mode
                         ? "bg-primary text-white shadow"
                         : "text-muted-foreground hover:bg-muted"
@@ -1066,20 +1228,6 @@ const TransferPortalPage = () => {
                   </button>
                 ))}
               </div>
-              <Badge variant="secondary" className="px-2.5 py-1 shrink-0">
-                {stageFilteredData.length} contacts
-              </Badge>
-              <Button variant="outline" size="sm" onClick={handleExport}>
-                Export CSV
-              </Button>
-              <Button size="sm" onClick={handleRefresh} disabled={refreshing}>
-                <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-                Refresh
-              </Button>
-              <Button size="sm" onClick={() => navigate('/add-lead')} variant="default">
-                <Plus className="mr-2 h-4 w-4" />
-                Add Lawyer
-              </Button>
             </div>
           </div>
 
@@ -1127,7 +1275,7 @@ const TransferPortalPage = () => {
                         ) : (
                           pageRows.map((row) => (
                             <Card
-                              key={row.id}
+                              key={row.ui_id ?? row.id}
                               draggable
                               className="relative w-full cursor-pointer transition hover:shadow-md"
                               onClick={() => handleView(row)}
@@ -1249,7 +1397,7 @@ const TransferPortalPage = () => {
                           const currentStage = dbTransferStages.find(s => s.key === currentStageId) ?? dbTransferStages.find(s => s.id === currentStageId);
                           const stageLabel = currentStage?.label || kanbanStages.find((stage) => stage.key === stageKey)?.label;
                           return (
-                            <tr key={row.id} className="border-b last:border-0">
+                            <tr key={row.ui_id ?? row.id} className="border-b last:border-0">
                               <td className="px-4 py-3">{row.lawyer_full_name || "Unnamed"}</td>
                               <td className="px-4 py-3">
                                 <div className="flex items-center gap-2">
@@ -1323,6 +1471,25 @@ const TransferPortalPage = () => {
               </DialogHeader>
 
               <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Pipeline</Label>
+                  <Select
+                    value={editPipeline}
+                    onValueChange={(value) => {
+                      setEditPipeline(value);
+                      setEditStage('');
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select pipeline" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cold_call_pipeline">Marketing Pipeline</SelectItem>
+                      <SelectItem value="lawyer_portal">Lawyer Portal</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <div className="space-y-2">
                   <Label>Stage</Label>
                   <div className="relative">

@@ -16,7 +16,7 @@ Enhanced the callback request feature to display on a dedicated page with comple
 - **Comprehensive lead details displayed**:
   - Customer Information: Name, Phone, State, Submission ID
   - Policy Information: Carrier, Coverage Amount, Monthly Premium, Lead Vendor
-  - Timeline: Created Date, Submission Date (with time)
+  - Timeline: Date, Submission Date (with time)
 - **Enhanced UX**:
   - Back button to return to lead portal
   - Breadcrumb-style navigation
