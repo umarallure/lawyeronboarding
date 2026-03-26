@@ -22,7 +22,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, RefreshCw, Pencil, StickyNote, SlidersHorizontal, X } from "lucide-react";
+import { RefreshCw, Pencil, StickyNote, SlidersHorizontal, X } from "lucide-react";
+import LogoLoader from "@/components/LogoLoader";
 import { useNavigate } from "react-router-dom";
 import { useAttorneys } from "@/hooks/useAttorneys";
 import { usePipelineStages, type PipelineStage } from "@/hooks/usePipelineStages";
@@ -883,14 +884,7 @@ const SubmissionPortalPage = () => {
   }, [editPipeline, editStage, reasonsByParent]);
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="flex items-center gap-2">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          <span>Loading lawyer portal data...</span>
-        </div>
-      </div>
-    );
+    return <LogoLoader page label="Loading lawyer portal..." />;
   }
 
   const handleView = (row: SubmissionPortalRow) => {

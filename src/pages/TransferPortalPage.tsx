@@ -25,7 +25,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useMarketingTeamFilterAccess } from "@/hooks/useMarketingTeamFilterAccess";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeftRight, Calendar, Loader2, Pencil, RefreshCw, Users, StickyNote, Plus, PhoneCall, SlidersHorizontal, X } from "lucide-react";
+import { ArrowLeftRight, Calendar, Pencil, RefreshCw, Users, StickyNote, Plus, PhoneCall, SlidersHorizontal, X } from "lucide-react";
+import LogoLoader from "@/components/LogoLoader";
 import { usePipelineStages, type PipelineStage } from "@/hooks/usePipelineStages";
 import {
   addDays,
@@ -979,14 +980,7 @@ const TransferPortalPage = () => {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="flex items-center gap-2">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          <span>Loading marketing pipeline data...</span>
-        </div>
-      </div>
-    );
+    return <LogoLoader page label="Loading marketing pipeline..." />;
   }
 
   return (

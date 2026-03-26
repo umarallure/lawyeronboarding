@@ -47,6 +47,7 @@ import AccountOrderDetailPage from "./pages/AccountOrderDetailPage";
 import AccountLawyerProfilesPage from "./pages/AccountLawyerProfilesPage";
 import AccountLawyerProfileDetailPage from "./pages/AccountLawyerProfileDetailPage";
 import AppShell from "@/components/layout/AppShell";
+import LogoLoader from "@/components/LogoLoader";
 import { Navigate } from "react-router-dom";
 
 const queryClient = new QueryClient();
@@ -54,7 +55,7 @@ const queryClient = new QueryClient();
 const AuthAwareFallbackRoute = () => {
   const { user, loading } = useAuth();
 
-  if (loading) return null;
+  if (loading) return <LogoLoader fullscreen label="Loading..." />;
 
   return <Navigate to={user ? "/leads" : "/auth"} replace />;
 };

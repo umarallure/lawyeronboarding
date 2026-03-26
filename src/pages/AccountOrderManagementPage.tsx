@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import LogoLoader from "@/components/LogoLoader";
 import { useNavigate } from "react-router-dom";
 import { AlertCircle, BriefcaseBusiness, Package, RefreshCw, Search, Users, Pencil, Trash2, MoreHorizontal, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import {
@@ -208,7 +209,7 @@ const getDaysUntil = (value: string) => {
 const AccountOrderManagementPage = () => {
   const navigate = useNavigate();
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [attorneyById, setAttorneyById] = useState<Record<string, AttorneyProfileRow>>({});
@@ -434,6 +435,10 @@ const AccountOrderManagementPage = () => {
       setDeleting(false);
     }
   }, [orderToDelete]);
+
+  if (loading && orders.length === 0) {
+    return <LogoLoader page label="Loading orders..." />;
+  }
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-6">

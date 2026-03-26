@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Mail, MessageCircle, PhoneCall, Users, Search, Loader2 } from "lucide-react";
+import LogoLoader from "@/components/LogoLoader";
 import { fetchInstantlyOverview, type InstantlyOverview } from "@/lib/instantly";
 import { format, startOfDay, endOfDay, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subWeeks, subMonths } from "date-fns";
 
@@ -293,7 +294,7 @@ const DailyDealFlowPage = () => {
   const [customEnd, setCustomEnd] = useState("");
 
   const [instantlyData, setInstantlyData] = useState<InstantlyOverview | null>(null);
-  const [instantlyLoading, setInstantlyLoading] = useState(false);
+  const [instantlyLoading, setInstantlyLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -335,6 +336,10 @@ const DailyDealFlowPage = () => {
   }, [searchTerm, platformFilter]);
 
   const dateLabel = DATE_RANGE_LABELS[dateRange];
+
+  if (instantlyLoading) {
+    return <LogoLoader page label="Loading outreach report..." />;
+  }
 
   return (
     <div className="space-y-5 px-4 md:px-6 pt-4">

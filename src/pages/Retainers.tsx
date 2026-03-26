@@ -11,6 +11,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useMarketingTeamFilterAccess } from '@/hooks/useMarketingTeamFilterAccess';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import LogoLoader from '@/components/LogoLoader';
 import {
   addDays,
   endOfMonth,
@@ -431,25 +432,11 @@ const Retainers = () => {
   const totalPages = getTotalPages();
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-2 text-muted-foreground">Loading retainers...</p>
-        </div>
-      </div>
-    );
+    return <LogoLoader page label="Loading retainers..." />;
   }
 
   if (isLoading && leads.length === 0) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-2 text-muted-foreground">Loading leads...</p>
-        </div>
-      </div>
-    );
+    return <LogoLoader page label="Loading leads..." />;
   }
 
   return (
