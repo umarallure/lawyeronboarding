@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import LogoLoader from '@/components/LogoLoader';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchInstantlyOverview } from '@/lib/instantly';
+import { fetchCalendlyStats } from '@/lib/calendly';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -182,7 +183,7 @@ const Dashboard = () => {
 
       const sb = supabase as unknown as typeof supabase;
 
-      const [stagesRes, dealFlowRowsRes, appUsersRes, ordersInRangeRes, instantlyOverview] = await Promise.all([
+      const [stagesRes, dealFlowRowsRes, appUsersRes, ordersInRangeRes, instantlyOverview, calendlyStats] = await Promise.all([
         sb
           .from('portal_stages')
           .select('id,key,label,pipeline')
@@ -210,6 +211,8 @@ const Dashboard = () => {
           .lt('created_at', endExclusiveIso),
         // Instantly AI: campaign analytics overview for Output + Interested/Connected stats
         fetchInstantlyOverview(startDateStr, endDateStr),
+        // Calendly: scheduled (future) and ran (past) meeting counts
+        fetchCalendlyStats(startDateStr, endDateStr),
       ]);
 
       if (cancelled) return;
@@ -299,12 +302,25 @@ const Dashboard = () => {
       const output = instantlyOverview?.reply_count_unique ?? 0;
       const interestedConnected = instantlyOverview?.total_interested ?? 0;
 
-      const [scheduledMeetings, ranMeeting, signedAgreements] =
-        await Promise.all([
-          countLawyerLeadsByStageTokens(scheduledStageTokens),
-          countLawyerLeadsByStageTokens(ranMeetingStageTokens),
-          countLawyerLeadsByStageTokens(signedStageTokens),
-        ]);
+      // Scheduled meetings and ran meeting now come from Calendly
+      const scheduledMeetings = calendlyStats?.scheduled ?? 0;
+      const ranMeeting = calendlyStats?.ran ?? 0;
+
+      const signedStageKeys = signedStageTokens.filter((t) => !t.includes('-'));
+      let signedAgreements = 0;
+      if (signedStageKeys.length > 0) {
+        const signedRes = await sb
+          .from('lawyer_leads')
+          .select('id', { count: 'exact', head: true })
+          .eq('pipeline_name', 'lawyer_portal')
+          .in('stage_id', signedStageKeys)
+          .gte('updated_at', startIso)
+          .lt('updated_at', endExclusiveIso)
+          .or('email.is.null,email.not.ilike.test@%')
+          .or('email.is.null,email.not.ilike.%@example.com')
+          .or('email.is.null,email.neq.test@accidentpayments.com');
+        signedAgreements = (signedRes?.count ?? 0) as number;
+      }
 
       if (cancelled) return;
 
