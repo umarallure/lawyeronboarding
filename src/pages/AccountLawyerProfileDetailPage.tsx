@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import LogoLoader from "@/components/LogoLoader";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, RefreshCw, Save, UserRound, X } from "lucide-react";
+import { ArrowLeft, Download, Eye, FileText, RefreshCw, Save, Trash2, Upload, UserRound, X } from "lucide-react";
 
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, storageSupabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -63,7 +73,42 @@ const startCase = (value: string) =>
     .replace(/_/g, " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
 
-type TabKey = "personal" | "capacity" | "status" | "limit";
+type TabKey = "personal" | "capacity" | "status" | "limit" | "retainer";
+
+const RETAINER_BUCKET = "retainer-contract-documents";
+
+const US_STATES = [
+  { code: "AL", name: "Alabama" }, { code: "AK", name: "Alaska" }, { code: "AZ", name: "Arizona" },
+  { code: "AR", name: "Arkansas" }, { code: "CA", name: "California" }, { code: "CO", name: "Colorado" },
+  { code: "CT", name: "Connecticut" }, { code: "DE", name: "Delaware" }, { code: "FL", name: "Florida" },
+  { code: "GA", name: "Georgia" }, { code: "HI", name: "Hawaii" }, { code: "ID", name: "Idaho" },
+  { code: "IL", name: "Illinois" }, { code: "IN", name: "Indiana" }, { code: "IA", name: "Iowa" },
+  { code: "KS", name: "Kansas" }, { code: "KY", name: "Kentucky" }, { code: "LA", name: "Louisiana" },
+  { code: "ME", name: "Maine" }, { code: "MD", name: "Maryland" }, { code: "MA", name: "Massachusetts" },
+  { code: "MI", name: "Michigan" }, { code: "MN", name: "Minnesota" }, { code: "MS", name: "Mississippi" },
+  { code: "MO", name: "Missouri" }, { code: "MT", name: "Montana" }, { code: "NE", name: "Nebraska" },
+  { code: "NV", name: "Nevada" }, { code: "NH", name: "New Hampshire" }, { code: "NJ", name: "New Jersey" },
+  { code: "NM", name: "New Mexico" }, { code: "NY", name: "New York" }, { code: "NC", name: "North Carolina" },
+  { code: "ND", name: "North Dakota" }, { code: "OH", name: "Ohio" }, { code: "OK", name: "Oklahoma" },
+  { code: "OR", name: "Oregon" }, { code: "PA", name: "Pennsylvania" }, { code: "RI", name: "Rhode Island" },
+  { code: "SC", name: "South Carolina" }, { code: "SD", name: "South Dakota" }, { code: "TN", name: "Tennessee" },
+  { code: "TX", name: "Texas" }, { code: "UT", name: "Utah" }, { code: "VT", name: "Vermont" },
+  { code: "VA", name: "Virginia" }, { code: "WA", name: "Washington" }, { code: "WV", name: "West Virginia" },
+  { code: "WI", name: "Wisconsin" }, { code: "WY", name: "Wyoming" },
+];
+
+type RetainerDoc = {
+  id: string;
+  user_id: string;
+  state: string;
+  document_path: string;
+  document_name: string;
+  document_mime_type: string;
+  document_size_bytes: number;
+  notes: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
 
 const NON_EDITABLE_PROFILE_KEYS = new Set(["user_id", "id", "created_at", "updated_at"]);
 
@@ -160,6 +205,17 @@ const AccountLawyerProfileDetailPage = () => {
   const [statusDraft, setStatusDraft] = useState<string>("active");
   const [stateLimitDraft, setStateLimitDraft] = useState<string>("");
   const [saving, setSaving] = useState(false);
+
+  const [retainerFiles, setRetainerFiles] = useState<RetainerDoc[]>([]);
+  const [retainerLoading, setRetainerLoading] = useState(false);
+  const [retainerError, setRetainerError] = useState<string | null>(null);
+  const [docToDelete, setDocToDelete] = useState<RetainerDoc | null>(null);
+  const [showUploadCard, setShowUploadCard] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadState, setUploadState] = useState("");
+  const [uploadNotes, setUploadNotes] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const refresh = useCallback(async () => {
     if (!userId) return;
@@ -555,6 +611,133 @@ const AccountLawyerProfileDetailPage = () => {
     }
   };
 
+  const loadRetainerFiles = useCallback(async () => {
+    if (!userId) return;
+    setRetainerLoading(true);
+    setRetainerError(null);
+    try {
+      const docsClient = supabase as unknown as {
+        from: (table: string) => {
+          select: (cols: string) => {
+            eq: (col: string, v: string) => {
+              order: (col: string, opts: { ascending: boolean }) => Promise<{ data: RetainerDoc[] | null; error: { message?: string } | null }>;
+            };
+          };
+        };
+      };
+      const { data, error: listError } = await docsClient
+        .from("retainer_contract_documents")
+        .select("id,user_id,state,document_path,document_name,document_mime_type,document_size_bytes,notes,created_at,updated_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+      if (listError) throw new Error(listError.message || "Failed to load documents");
+      setRetainerFiles(data ?? []);
+    } catch (e) {
+      setRetainerError(e instanceof Error ? e.message : "Unable to load documents.");
+    } finally {
+      setRetainerLoading(false);
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    if (activeTab === "retainer") void loadRetainerFiles();
+  }, [activeTab, loadRetainerFiles]);
+
+  const downloadRetainerFile = async (doc: RetainerDoc) => {
+    const { data, error: dlError } = await storageSupabase.storage
+      .from(RETAINER_BUCKET)
+      .createSignedUrl(doc.document_path, 60);
+    if (dlError || !data?.signedUrl) {
+      toast({ title: "Download failed", description: dlError?.message ?? "Unable to generate link.", variant: "destructive" });
+      return;
+    }
+    window.open(data.signedUrl, "_blank");
+  };
+
+  const confirmDeleteRetainerFile = async () => {
+    if (!docToDelete) return;
+    const doc = docToDelete;
+    setDocToDelete(null);
+    await deleteRetainerFile(doc);
+  };
+
+  const deleteRetainerFile = async (doc: RetainerDoc) => {
+    const docsClient = supabase as unknown as {
+      from: (table: string) => {
+        delete: () => {
+          eq: (col: string, v: string) => Promise<{ error: { message?: string } | null }>;
+        };
+      };
+    };
+    const { error: delError } = await docsClient
+      .from("retainer_contract_documents")
+      .delete()
+      .eq("id", doc.id);
+    if (delError) {
+      toast({ title: "Delete failed", description: delError.message, variant: "destructive" });
+      return;
+    }
+    // Also remove from storage
+    await storageSupabase.storage.from(RETAINER_BUCKET).remove([doc.document_path]);
+    toast({ title: "Deleted", description: `${doc.document_name} removed.` });
+    void loadRetainerFiles();
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null;
+    setUploadFile(file);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const cancelUpload = () => {
+    setShowUploadCard(false);
+    setUploadFile(null);
+    setUploadState("");
+    setUploadNotes("");
+  };
+
+  const saveDocument = async () => {
+    if (!uploadFile || !userId) return;
+    if (!uploadState) {
+      toast({ title: "State required", description: "Please select a state for this document.", variant: "destructive" });
+      return;
+    }
+    setUploading(true);
+    try {
+      const path = `${userId}/${uploadState}/${Date.now()}-${uploadFile.name}`;
+      const { error: upError } = await storageSupabase.storage
+        .from(RETAINER_BUCKET)
+        .upload(path, uploadFile, { upsert: false });
+      if (upError) throw new Error(upError.message);
+
+      const docsClient = supabase as unknown as {
+        from: (table: string) => {
+          insert: (values: Record<string, unknown>) => Promise<{ error: { message?: string } | null }>;
+        };
+      };
+      const { error: insertError } = await docsClient.from("retainer_contract_documents").insert({
+        user_id: userId,
+        state: uploadState,
+        document_path: path,
+        document_name: uploadFile.name,
+        document_mime_type: uploadFile.type || "application/octet-stream",
+        document_size_bytes: uploadFile.size,
+        notes: uploadNotes.trim() || null,
+      });
+      if (insertError) {
+        await storageSupabase.storage.from(RETAINER_BUCKET).remove([path]);
+        throw new Error(insertError.message);
+      }
+      toast({ title: "Saved", description: `${uploadFile.name} uploaded successfully.` });
+      cancelUpload();
+      void loadRetainerFiles();
+    } catch (e) {
+      toast({ title: "Upload failed", description: e instanceof Error ? e.message : "Unable to upload file.", variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const tabActions = (tab: TabKey, onSave: () => void | Promise<void>) => {
     const isEditing = editingTab === tab;
     if (isEditing) {
@@ -713,6 +896,9 @@ const AccountLawyerProfileDetailPage = () => {
                   </TabsTrigger>
                   <TabsTrigger value="limit" disabled={Boolean(editingTab) && editingTab !== "limit"}>
                     Order State Limit
+                  </TabsTrigger>
+                  <TabsTrigger value="retainer" disabled={Boolean(editingTab)}>
+                    Retainer Contract
                   </TabsTrigger>
                 </TabsList>
               </div>
@@ -890,6 +1076,182 @@ const AccountLawyerProfileDetailPage = () => {
                     </div>
                   </div>
                 )}
+              </TabsContent>
+
+              <TabsContent value="retainer">
+                {/* Header row */}
+                <div className="flex items-start justify-between gap-3 mt-4">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium">Retainer Contract Documents</div>
+                    <div className="text-xs text-muted-foreground">Upload retainer agreement documents for different states.</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => void loadRetainerFiles()} disabled={retainerLoading}>
+                      <RefreshCw className={retainerLoading ? "mr-2 h-4 w-4 animate-spin" : "mr-2 h-4 w-4"} />
+                      Refresh
+                    </Button>
+                    {!showUploadCard && (
+                      <Button size="sm" onClick={() => setShowUploadCard(true)}>
+                        <Upload className="mr-2 h-4 w-4" />
+                        Add Document
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Upload card */}
+                {showUploadCard && (
+                  <div className="mt-4 rounded-lg border bg-muted/10 p-4 space-y-4">
+                    <div>
+                      <div className="text-sm font-medium">Add New Document</div>
+                      <div className="text-xs text-muted-foreground">Upload a state-specific retainer file and add notes in one clean step.</div>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      {/* File picker */}
+                      <div className="space-y-1">
+                        <div className="text-xs font-medium">
+                          Document <span className="text-destructive">*</span>
+                        </div>
+                        <div
+                          className="flex flex-col items-center justify-center rounded-md border-2 border-dashed px-4 py-6 cursor-pointer hover:bg-muted/20 transition-colors"
+                          onClick={() => fileInputRef.current?.click()}
+                        >
+                          {uploadFile ? (
+                            <div className="text-center">
+                              <FileText className="mx-auto h-6 w-6 text-muted-foreground mb-1" />
+                              <div className="text-sm font-medium truncate max-w-[180px]">{uploadFile.name}</div>
+                              <div className="text-xs text-muted-foreground">{(uploadFile.size / 1024).toFixed(1)} KB</div>
+                            </div>
+                          ) : (
+                            <div className="text-center">
+                              <Upload className="mx-auto h-6 w-6 text-muted-foreground mb-1" />
+                              <div className="text-sm text-muted-foreground">Click to upload document</div>
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground">Accepted: PDF, DOC, DOCX. Max 10MB</div>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          className="hidden"
+                          accept=".pdf,.doc,.docx"
+                          onChange={handleFileSelect}
+                        />
+                      </div>
+
+                      {/* State selector */}
+                      <div className="space-y-1">
+                        <div className="text-xs font-medium">
+                          State <span className="text-destructive">*</span>
+                        </div>
+                        <Select value={uploadState} onValueChange={setUploadState}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a state" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {US_STATES.map((s) => (
+                              <SelectItem key={s.code} value={s.code}>{s.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {/* Notes */}
+                    <div className="space-y-1">
+                      <div className="text-xs font-medium">Notes <span className="text-muted-foreground">(Optional)</span></div>
+                      <Textarea
+                        placeholder="Add any notes about this document..."
+                        value={uploadNotes}
+                        onChange={(e) => setUploadNotes(e.target.value)}
+                        className="min-h-[80px]"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-xs text-muted-foreground">You can update notes or remove this document later from the list below.</div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Button variant="outline" size="sm" onClick={cancelUpload} disabled={uploading}>Cancel</Button>
+                        <Button size="sm" onClick={() => void saveDocument()} disabled={uploading || !uploadFile || !uploadState}>
+                          <Save className="mr-2 h-4 w-4" />
+                          {uploading ? "Saving…" : "Save Document"}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Documents list */}
+                {retainerError ? (
+                  <div className="mt-4 rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">{retainerError}</div>
+                ) : retainerLoading ? (
+                  <div className="mt-4 rounded-lg border bg-muted/20 p-4 text-sm text-muted-foreground">Loading documents…</div>
+                ) : retainerFiles.length === 0 ? (
+                  <div className="mt-4 rounded-lg border bg-muted/20 p-4 text-sm text-muted-foreground">No retainer contract documents uploaded yet.</div>
+                ) : (
+                  <div className="mt-4 space-y-0 rounded-lg border divide-y">
+                    <div className="flex items-center justify-between px-4 py-2">
+                      <div className="text-xs font-medium text-muted-foreground">Uploaded Documents</div>
+                      <div className="text-xs text-muted-foreground">{retainerFiles.length} document{retainerFiles.length !== 1 ? "s" : ""}</div>
+                    </div>
+                    {retainerFiles.map((doc) => {
+                      const stateName = US_STATES.find((s) => s.code === doc.state)?.name ?? doc.state;
+                      const sizeKb = `${(doc.document_size_bytes / 1024).toFixed(1)} KB`;
+                      const uploadedAt = doc.created_at ? formatDateTime(doc.created_at) : null;
+                      const ext = doc.document_name.split(".").pop()?.toUpperCase() ?? "";
+                      return (
+                        <div key={doc.id} className="flex items-center gap-3 px-4 py-3">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-bold">
+                            {doc.state}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-medium truncate">{doc.document_name}</span>
+                              {ext && <Badge variant="outline" className="text-xs shrink-0 font-mono">{ext}</Badge>}
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-0.5">
+                              {[stateName, sizeKb, uploadedAt].filter(Boolean).join(" · ")}
+                              {doc.notes && <span className="ml-1 italic">— {doc.notes}</span>}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => void downloadRetainerFile(doc)} title="View">
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => void downloadRetainerFile(doc)} title="Download">
+                              <Download className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDocToDelete(doc)} title="Delete">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <AlertDialog open={Boolean(docToDelete)} onOpenChange={(open) => { if (!open) setDocToDelete(null); }}>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete Document</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Are you sure you want to delete <span className="font-medium text-foreground">{docToDelete?.document_name}</span>?
+                        This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        onClick={() => void confirmDeleteRetainerFile()}
+                      >
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </TabsContent>
             </Tabs>
           </CardContent>

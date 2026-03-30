@@ -21,6 +21,15 @@ const rawSupabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KE
   }
 });
 
+// Storage client without the Content-Type override so file uploads work correctly
+export const storageSupabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  auth: {
+    storage: localStorage,
+    persistSession: true,
+    autoRefreshToken: true,
+  },
+});
+
 const ENABLE_DATALESS_PORTAL_MODE = true;
 const LOGIN_ALLOWED_TABLES = new Set([
   'app_users',
@@ -31,6 +40,7 @@ const LOGIN_ALLOWED_TABLES = new Set([
   'marketing_team',
   'lawyer_lead_notes',
   'attorney_profiles',
+  'retainer_contract_documents',
 ]);
 
 const createMockQueryBuilder = () => {

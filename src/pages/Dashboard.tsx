@@ -175,7 +175,6 @@ const Dashboard = () => {
 
       const startIso = start.toISOString();
       const endExclusiveIso = addDays(startOfDay(end), 1).toISOString();
-      // Instantly API uses YYYY-MM-DD strings
       const startDateStr = format(start, 'yyyy-MM-dd');
       const endDateStr = format(end, 'yyyy-MM-dd');
 
@@ -188,7 +187,6 @@ const Dashboard = () => {
           .from('portal_stages')
           .select('id,key,label,pipeline')
           .in('pipeline', ['cold_call_pipeline', 'lawyer_portal']),
-        // Keep null-email records — use or(is.null, not.ilike) so NULL rows are not excluded
         sb
           .from('lawyer_leads')
           .select('created_at,pipeline_name')
@@ -198,12 +196,10 @@ const Dashboard = () => {
           .or('email.is.null,email.not.ilike.%@example.com')
           .or('email.is.null,email.neq.test@accidentpayments.com')
           .order('created_at', { ascending: true }),
-        // Fetch all lawyers for inactive/active calculations
         sb
           .from('app_users')
           .select('user_id,email,display_name')
           .eq('role', 'lawyer'),
-        // Orders in selected date range (used for both active + inactive lawyers)
         sb
           .from('orders')
           .select('lawyer_id')
