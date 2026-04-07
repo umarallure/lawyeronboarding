@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { MultiSelect } from "@/components/ui/multi-select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -97,6 +98,8 @@ const US_STATES = [
   { code: "WI", name: "Wisconsin" }, { code: "WY", name: "Wyoming" },
 ];
 
+const STATE_OPTIONS = US_STATES.map((s) => `${s.code} - ${s.name}`);
+
 type RetainerDoc = {
   id: string;
   user_id: string;
@@ -152,6 +155,7 @@ const PERSONAL_FIELD_CANDIDATES = [
 
 const CAPACITY_FIELD_CANDIDATES = [
   "licensed_states",
+  "general_coverage",
   "jurisdictions",
   "jurisdiction",
   "practice_areas",
@@ -211,6 +215,7 @@ const AccountLawyerProfileDetailPage = () => {
 
   const [personalDraft, setPersonalDraft] = useState<Record<string, string>>({});
   const [capacityDraft, setCapacityDraft] = useState<Record<string, string>>({});
+  const [generalCoverageDraft, setGeneralCoverageDraft] = useState<string[]>([]);
   const [statusDraft, setStatusDraft] = useState<string>("active");
   const [stateLimitDraft, setStateLimitDraft] = useState<string>("");
   const [saving, setSaving] = useState(false);
@@ -387,6 +392,16 @@ const AccountLawyerProfileDetailPage = () => {
       else nextCapacity[key] = v === null || v === undefined ? "" : String(v);
     }
 
+    // Hydrate general_coverage as "CODE - Name" options for the MultiSelect
+    const rawCoverage = profile ? profile["general_coverage"] : null;
+    const storedCodes: string[] = Array.isArray(rawCoverage) ? rawCoverage.map(String) : [];
+    const hydratedCoverage = storedCodes
+      .map((code) => {
+        const match = US_STATES.find((s) => s.code === code);
+        return match ? `${match.code} - ${match.name}` : code;
+      });
+    setGeneralCoverageDraft(hydratedCoverage);
+
     setPersonalDraft(nextPersonal);
     setCapacityDraft(nextCapacity);
     setStatusDraft(normalizeAccountStatus(appUser?.account_status));
@@ -496,6 +511,11 @@ const AccountLawyerProfileDetailPage = () => {
         const raw = (capacityDraft[key] ?? "").trim();
         const current = profile ? profile[key] : null;
 
+        if (key === "general_coverage") {
+          // generalCoverageDraft holds "CODE - Name" strings; store only the code
+          patch[key] = generalCoverageDraft.map((opt) => opt.split(" - ")[0].trim()).filter(Boolean);
+          continue;
+        }
         if (Array.isArray(current) || key === "licensed_states") {
           patch[key] = raw ? raw.split(",").map((s) => s.trim()).filter(Boolean) : [];
           continue;
@@ -1137,6 +1157,7 @@ const AccountLawyerProfileDetailPage = () => {
                       const isMulti =
                         Array.isArray(current) ||
                         key === "licensed_states" ||
+                        key === "general_coverage" ||
                         key === "practice_areas" ||
                         key === "case_types";
 
@@ -1145,14 +1166,30 @@ const AccountLawyerProfileDetailPage = () => {
                           <div className="text-xs font-medium text-muted-foreground">{label}</div>
                           <div>
                             {isEditing ? (
-                              <Input
-                                value={value}
-                                onChange={(e) => setCapacityDraft((prev) => ({ ...prev, [key]: e.target.value }))}
-                                placeholder={isMulti ? "Comma separated" : undefined}
-                              />
+                              key === "general_coverage" ? (
+                                <MultiSelect
+                                  options={STATE_OPTIONS}
+                                  selected={generalCoverageDraft}
+                                  onChange={setGeneralCoverageDraft}
+                                  placeholder="Select states…"
+                                />
+                              ) : (
+                                <Input
+                                  value={value}
+                                  onChange={(e) => setCapacityDraft((prev) => ({ ...prev, [key]: e.target.value }))}
+                                  placeholder={isMulti ? "Comma separated" : undefined}
+                                />
+                              )
                             ) : (
-                              <div className="rounded-md border bg-muted/10 px-3 py-2 text-sm break-words">
-                                {Array.isArray(current) ? current.map(String).join(", ") : renderValue(current)}
+                              <div className="min-h-[38px] flex items-center rounded-md border bg-muted/10 px-3 py-2 text-sm break-words">
+                                {key === "general_coverage"
+                                  ? (Array.isArray(current) && current.length
+                                      ? (current as string[]).map((code) => {
+                                          const s = US_STATES.find((x) => x.code === code);
+                                          return s ? `${s.code} - ${s.name}` : code;
+                                        }).join(", ")
+                                      : "—")
+                                  : Array.isArray(current) ? (current.length ? current.map(String).join(", ") : "—") : renderValue(current)}
                               </div>
                             )}
                           </div>
