@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { ThemeProvider } from "@/hooks/useTheme";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { AgentActivityDashboard } from "@/components/AgentActivityDashboard";
@@ -34,6 +35,7 @@ import { AgentEligibilityPage } from "./pages/AgentEligibilityPage";
 import BufferPerformanceReport from "./pages/BufferPerformanceReport";
 import LicensedAgentPerformanceReport from "./pages/LicensedAgentPerformanceReport";
 import LicensedAgentInbox from "./pages/LicensedAgentInbox";
+import SlackPage from "./pages/SlackPage";
 import TaskDetailView from "./pages/TaskDetailView";
 import RetentionTasksView from "./pages/RetentionTasksView";
 import AdminAnalytics from "./pages/AdminAnalytics";
@@ -46,6 +48,8 @@ import OnboardingManagementPage from "./pages/OnboardingManagementPage";
 import AccountOrderDetailPage from "./pages/AccountOrderDetailPage";
 import AccountLawyerProfilesPage from "./pages/AccountLawyerProfilesPage";
 import AccountLawyerProfileDetailPage from "./pages/AccountLawyerProfileDetailPage";
+import SectionPlaceholderPage from "./pages/SectionPlaceholderPage";
+import OnboardingPortalPage from "./pages/OnboardingPortalPage";
 import AppShell from "@/components/layout/AppShell";
 import LogoLoader from "@/components/LogoLoader";
 import { Navigate } from "react-router-dom";
@@ -61,6 +65,7 @@ const AuthAwareFallbackRoute = () => {
 };
 
 const App = () => (
+  <ThemeProvider>
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <TooltipProvider>
@@ -142,6 +147,17 @@ const App = () => (
                   </AppShell>
                 </ProtectedRoute>
               } 
+            />
+
+            <Route
+              path="/onboarding-portal"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Onboarding Portal">
+                    <OnboardingPortalPage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
             />
 
             <Route
@@ -345,6 +361,36 @@ const App = () => (
                 </ProtectedRoute>
               } 
             />
+            <Route
+              path="/slack"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Slack">
+                    <SlackPage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/hubspot"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Hubspot">
+                    <SectionPlaceholderPage sectionName="Hubspot" />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/lawyer-management"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Lawyer Management">
+                    <SectionPlaceholderPage sectionName="Lawyer Management" />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
             <Route 
               path="/lead-detail/:id" 
               element={
@@ -363,7 +409,7 @@ const App = () => (
               path="/transfer-portal" 
               element={
                 <ProtectedRoute>
-                  <AppShell title="Marketing Opportunitues">
+                  <AppShell title="Marketing Opportunities">
                     <TransferPortalPage />
                   </AppShell>
                 </ProtectedRoute>
@@ -385,6 +431,16 @@ const App = () => (
                 <ProtectedRoute>
                   <AppShell title="Agent Reports & Logs">
                     <ReportsPage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/product-guide"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Product Guide">
+                    <SectionPlaceholderPage sectionName="Product Guide" />
                   </AppShell>
                 </ProtectedRoute>
               }
@@ -506,6 +562,7 @@ const App = () => (
       </TooltipProvider>
     </AuthProvider>
   </QueryClientProvider>
+  </ThemeProvider>
 );
 
 export default App;

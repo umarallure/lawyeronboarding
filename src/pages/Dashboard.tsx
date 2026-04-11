@@ -1,31 +1,21 @@
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import LogoLoader from '@/components/LogoLoader';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchInstantlyOverview } from '@/lib/instantly';
 import { fetchCalendlyStats } from '@/lib/calendly';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Button } from '@/components/ui/button';
+import KpiCard from '@/components/dashboard/KpiCard';
+import AnalyticsTrendCard from '@/components/dashboard/AnalyticsTrendCard';
+import DashboardFilterBar from '@/components/dashboard/DashboardFilterBar';
 import {
-  ChartContainer,
-  ChartLegend,
-  ChartLegendContent,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from '@/components/ui/chart';
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
-import { ChevronDown } from 'lucide-react';
+  Send,
+  UserCheck,
+  CalendarCheck,
+  Video,
+  FileCheck2,
+  Users,
+  UserPlus,
+  UserMinus,
+} from 'lucide-react';
 import {
   addDays,
   eachDayOfInterval,
@@ -409,25 +399,6 @@ const Dashboard = () => {
     };
   }, [timeRange, customStartDate, customEndDate]);
 
-  const chartConfig = useMemo(
-    () =>
-      ({
-        total: {
-          label: 'Total Opportunities',
-          color: 'hsl(24 95% 50%)',
-        },
-        marketing: {
-          label: 'Marketing Pipeline',
-          color: 'hsl(210 100% 45%)',
-        },
-        portal: {
-          label: 'Lawyer Portal Pipeline',
-          color: 'hsl(142 72% 38%)',
-        },
-      }) satisfies ChartConfig,
-    []
-  );
-
   const toggleStat = (key: StatCardKey) => {
     setVisibleStats((prev) =>
       prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
@@ -443,157 +414,86 @@ const Dashboard = () => {
         ? 'No Stats'
         : `${visibleStats.length} Stats`;
 
+  /* ── Icon + accent mapping for each KPI card ── */
+  const CARD_META: Record<
+    StatCardKey,
+    { icon: React.ReactNode; accent: import('@/components/dashboard/KpiCard').AccentColor }
+  > = {
+    output: { icon: <Send className="h-5 w-5" />, accent: 'orange' },
+    interestedConnected: { icon: <UserCheck className="h-5 w-5" />, accent: 'green' },
+    scheduledMeetings: { icon: <CalendarCheck className="h-5 w-5" />, accent: 'blue' },
+    ranMeeting: { icon: <Video className="h-5 w-5" />, accent: 'darkGreen' },
+    signedAgreements: { icon: <FileCheck2 className="h-5 w-5" />, accent: 'purple' },
+    opportunities: { icon: <Users className="h-5 w-5" />, accent: 'darkBlue' },
+    activeLawyers: { icon: <UserPlus className="h-5 w-5" />, accent: 'darkOrange' },
+    inactiveLawyers: { icon: <UserMinus className="h-5 w-5" />, accent: 'red' },
+  };
+
   if (statsLoading) {
     return <LogoLoader page label="Loading dashboard..." />;
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 space-y-6">
-      {/* Filter Bar */}
-      <div className="flex flex-wrap items-center gap-2">
-        {/* Date Range */}
-        <div className="flex items-center gap-2">
-          <Select
-            value={timeRange}
-            onValueChange={(v) => {
-              const next = v as DashboardTimeRange;
-              if (next === 'custom' && timeRange !== 'custom') {
-                const bounds = getPresetRangeBounds(timeRange as PresetTimeRange);
-                setCustomStartDate(format(bounds.start, 'yyyy-MM-dd'));
-                setCustomEndDate(format(bounds.end, 'yyyy-MM-dd'));
-              }
-              setTimeRange(next);
-            }}
-          >
-            <SelectTrigger className="w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectItem value="this_week">This Week</SelectItem>
-                <SelectItem value="last_week">Last Week</SelectItem>
-                <SelectItem value="this_month">This Month</SelectItem>
-                <SelectItem value="last_month">Last Month</SelectItem>
-                <SelectItem value="custom">Custom</SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
+    <div className="dashboard-premium min-h-full px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[1400px] space-y-5">
+        {/* ── Filter Bar ── */}
+        <DashboardFilterBar
+          timeRange={timeRange}
+          onTimeRangeChange={(v) => {
+            const next = v as DashboardTimeRange;
+            if (next === 'custom' && timeRange !== 'custom') {
+              const bounds = getPresetRangeBounds(timeRange as PresetTimeRange);
+              setCustomStartDate(format(bounds.start, 'yyyy-MM-dd'));
+              setCustomEndDate(format(bounds.end, 'yyyy-MM-dd'));
+            }
+            setTimeRange(next);
+          }}
+          showCustomDates={timeRange === 'custom'}
+          customStartDate={customStartDate}
+          customEndDate={customEndDate}
+          onCustomStartChange={setCustomStartDate}
+          onCustomEndChange={setCustomEndDate}
+          statPickerOpen={statPickerOpen}
+          onStatPickerOpenChange={setStatPickerOpen}
+          statPickerLabel={statPickerLabel}
+          statCards={ALL_STAT_CARDS}
+          visibleStats={visibleStats}
+          onToggleStat={(key) => toggleStat(key as StatCardKey)}
+          onSelectAll={() =>
+            setVisibleStats(
+              visibleStats.length === ALL_STAT_KEYS.length ? [] : [...ALL_STAT_KEYS]
+            )
+          }
+          allSelected={visibleStats.length === ALL_STAT_KEYS.length}
+        />
 
-          {timeRange === 'custom' && (
-            <>
-              <span className="text-xs text-muted-foreground">From</span>
-              <Input
-                type="date"
-                className="w-36"
-                value={customStartDate}
-                max={customEndDate || undefined}
-                onChange={(e) => setCustomStartDate(e.target.value)}
-              />
-              <span className="text-xs text-muted-foreground">To</span>
-              <Input
-                type="date"
-                className="w-36"
-                value={customEndDate}
-                min={customStartDate || undefined}
-                onChange={(e) => setCustomEndDate(e.target.value)}
-              />
-            </>
-          )}
-        </div>
-
-        <div className="h-6 w-px bg-border mx-1 hidden sm:block" />
-
-        {/* Stat Card Picker */}
-        <Popover open={statPickerOpen} onOpenChange={setStatPickerOpen}>
-          <PopoverTrigger asChild>
-            <Button variant="outline" className="gap-2">
-              {statPickerLabel}
-              <ChevronDown className="h-4 w-4 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-52 p-2" align="start">
-            <div className="space-y-1">
-              {/* Select All / Clear */}
-              <div className="flex items-center justify-between px-2 py-1 mb-1 border-b">
-                <span className="text-xs font-medium text-muted-foreground">Stat Cards</span>
-                <button
-                  className="text-xs text-primary hover:underline"
-                  onClick={() =>
-                    setVisibleStats(
-                      visibleStats.length === ALL_STAT_KEYS.length ? [] : [...ALL_STAT_KEYS]
-                    )
-                  }
-                >
-                  {visibleStats.length === ALL_STAT_KEYS.length ? 'Clear all' : 'Select all'}
-                </button>
-              </div>
-              {ALL_STAT_CARDS.map((card) => (
-                <label
+        {/* ── KPI Cards: 2-col mobile, 4-col desktop ── */}
+        {visibleCards.length > 0 && (
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            {visibleCards.map((card, idx) => {
+              const meta = CARD_META[card.key];
+              return (
+                <KpiCard
                   key={card.key}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer"
-                >
-                  <Checkbox
-                    checked={visibleStats.includes(card.key)}
-                    onCheckedChange={() => toggleStat(card.key)}
-                  />
-                  <span className="text-sm">{card.label}</span>
-                </label>
-              ))}
-            </div>
-          </PopoverContent>
-        </Popover>
+                  label={card.label}
+                  value={stats[card.key]}
+                  icon={meta.icon}
+                  accent={meta.accent}
+                  animationDelay={60 * idx}
+                />
+              );
+            })}
+          </div>
+        )}
+
+        {/* ── Analytics Trend Card ── */}
+        <AnalyticsTrendCard
+          data={dealFlowTrend}
+          title={`Onboarding Trends \u2014 ${getRangeLabel(timeRange)}`}
+          subtitle="Daily opportunity flow across all pipelines"
+          animationDelay={visibleCards.length * 60 + 80}
+        />
       </div>
-
-      {/* Stat Cards */}
-      {visibleCards.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {visibleCards.map((card) => (
-            <Card key={card.key}>
-              <CardHeader>
-                <CardTitle className="text-sm">{card.label}</CardTitle>
-                {card.subtitle && (
-                  <p className="text-xs text-muted-foreground">{card.subtitle}</p>
-                )}
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-semibold">{stats[card.key]}</div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {/* Chart */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">Lawyer Onboarding Stats ({getRangeLabel(timeRange)})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ChartContainer config={chartConfig} className="h-[320px] w-full">
-            <BarChart data={dealFlowTrend} margin={{ left: 12, right: 12 }}>
-              <CartesianGrid vertical={false} />
-              <XAxis
-                dataKey="day"
-                tickLine={false}
-                axisLine={false}
-                tickMargin={8}
-              />
-              <YAxis
-                tickLine={false}
-                axisLine={false}
-                tickMargin={8}
-                allowDecimals={false}
-                width={30}
-              />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <ChartLegend content={<ChartLegendContent />} />
-              <Bar dataKey="total" fill="var(--color-total)" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="marketing" fill="var(--color-marketing)" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="portal" fill="var(--color-portal)" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ChartContainer>
-        </CardContent>
-      </Card>
     </div>
   );
 };

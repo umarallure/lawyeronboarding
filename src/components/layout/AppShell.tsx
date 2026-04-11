@@ -1,10 +1,14 @@
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
+  BookOpen,
+  BriefcaseBusiness,
+  Building2,
   ChevronDown,
   ChevronRight,
   Grid3X3,
   LayoutDashboard,
+  MessageSquare,
   Package,
   Users,
   LogOut,
@@ -14,6 +18,8 @@ import {
   PanelLeftOpen,
   Menu,
   X,
+  Sun,
+  Moon,
 } from 'lucide-react';
 
 import { TbUserShield } from "react-icons/tb";
@@ -29,6 +35,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/hooks/useAuth';
+import { useTheme } from '@/hooks/useTheme';
 import { supabase } from '@/integrations/supabase/client';
 
 type NavItem = {
@@ -65,6 +72,7 @@ const AppShell = ({
   autoCollapseSidebarAfterMs,
 }: AppShellProps) => {
   const { user, signOut } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const locationState = (location.state as { activeNav?: string } | null) || null;
@@ -213,16 +221,9 @@ const AppShell = ({
         icon: <LayoutDashboard className="h-4 w-4 text-current" />,
       },
       {
-        label: 'Marketing Team',
-        to: '/marketing-team',
-        icon: <Users className="h-4 w-4 text-current" />,
-        show: isSuperAdmin,
-      },
-      {
-        label: 'Lead Assignment',
-        to: '/lead-assignment',
-        icon: <Users className="h-4 w-4 text-current" />,
-        show: isSuperAdmin,
+        label: 'Onboarding Portal',
+        to: '/onboarding-portal',
+        icon: <Package className="h-4 w-4 text-current" />,
       },
       {
         label: 'Lawyer Contacts',
@@ -231,7 +232,7 @@ const AppShell = ({
         end: true,
       },
       {
-        label: 'Marketing Opportunitues',
+        label: 'Marketing Opportunities',
         to: '/transfer-portal',
         icon: <Eye className="h-4 w-4 text-current" />,
       },
@@ -241,9 +242,29 @@ const AppShell = ({
         icon: <CheckCircle className="h-4 w-4 text-current" />,
       },
       {
+        label: 'Slack',
+        to: '/slack',
+        icon: <MessageSquare className="h-4 w-4 text-current" />,
+      },
+      {
+        label: 'Hubspot',
+        to: '/hubspot',
+        icon: <Building2 className="h-4 w-4 text-current" />,
+      },
+      {
+        label: 'Lawyer Management',
+        to: '/lawyer-management',
+        icon: <BriefcaseBusiness className="h-4 w-4 text-current" />,
+      },
+      {
         label: 'Daily Outreach Report',
         to: '/daily-deal-flow',
         icon: <Grid3X3 className="h-4 w-4 text-current" />,
+      },
+      {
+        label: 'Product Guide',
+        to: '/product-guide',
+        icon: <BookOpen className="h-4 w-4 text-current" />,
       },
       {
         label: 'Account Management',
@@ -267,6 +288,18 @@ const AppShell = ({
             to: '/account-management/lawyer-profiles',
           },
         ],
+      },
+      {
+        label: 'Marketing Team',
+        to: '/marketing-team',
+        icon: <Users className="h-4 w-4 text-current" />,
+        show: isSuperAdmin,
+      },
+      {
+        label: 'Lead Assignment',
+        to: '/lead-assignment',
+        icon: <Users className="h-4 w-4 text-current" />,
+        show: isSuperAdmin,
       },
     ];
 
@@ -471,6 +504,22 @@ const AppShell = ({
                 <h1 className="text-xs sm:text-sm font-semibold text-foreground truncate">{title}</h1>
               </div>
 
+              <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                onClick={toggleTheme}
+              >
+                {theme === 'dark' ? (
+                  <Sun className="h-4 w-4" />
+                ) : (
+                  <Moon className="h-4 w-4" />
+                )}
+              </Button>
+
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -502,6 +551,7 @@ const AppShell = ({
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+              </div>
             </div>
           </header>
 

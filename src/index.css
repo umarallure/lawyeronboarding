@@ -49,34 +49,42 @@
   }
 
   .dark {
-    /* Inverse for Dark Mode */
-    --background: 0 0% 13%; /* Black as base */
-    --foreground: 0 0% 85%; /* White as text */
+    --background: 0 0% 12.5%;
+    --foreground: 0 0% 90%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 85%;
+    --card: 0 0% 14%;
+    --card-foreground: 0 0% 90%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 85%;
+    --popover: 0 0% 14%;
+    --popover-foreground: 0 0% 90%;
 
-    --primary: 18 83% 37%; /* Keep orange as primary */
+    --primary: 18 83% 37%;
     --primary-foreground: 0 0% 95%;
 
-    --secondary: 0 0% 20%;
-    --secondary-foreground: 0 0% 85%;
+    --secondary: 0 0% 18%;
+    --secondary-foreground: 0 0% 90%;
 
-    --muted: 0 0% 25%;
-    --muted-foreground: 0 0% 65%;
+    --muted: 0 0% 18%;
+    --muted-foreground: 0 0% 60%;
 
-    --accent: 0 0% 25%;
-    --accent-foreground: 0 0% 85%;
+    --accent: 0 0% 18%;
+    --accent-foreground: 0 0% 90%;
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 0 0% 25%;
-    --input: 0 0% 25%;
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
     --ring: 18 83% 37%;
+
+    --sidebar-background: 0 0% 11%;
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-primary: 18 83% 37%;
+    --sidebar-primary-foreground: 0 0% 95%;
+    --sidebar-accent: 0 0% 16%;
+    --sidebar-accent-foreground: 0 0% 90%;
+    --sidebar-border: 0 0% 18%;
+    --sidebar-ring: 18 83% 37%;
   }
 }
 
@@ -98,7 +106,7 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
-  
+
   .line-clamp-3 {
     display: -webkit-box;
     -webkit-line-clamp: 3;
@@ -124,4 +132,94 @@
   .app-main .min-h-screen {
     min-height: 100%;
   }
+}
+
+/* ── Dashboard Premium Theme ── */
+
+.dashboard-premium {
+  /* Light mode defaults */
+  --dash-bg: #f5f3f0;
+  --dash-surface: rgba(255, 255, 255, 0.75);
+  --dash-border: rgba(0, 0, 0, 0.08);
+  --dash-border-hover: rgba(0, 0, 0, 0.15);
+  --dash-text: #1a1a1a;
+  --dash-text-muted: #6b6560;
+  --dash-accent: #AE4010;
+  --dash-accent-light: #F9D7B1;
+  --dash-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
+  --dash-shadow-hover: 0 2px 8px rgba(0,0,0,0.1), 0 8px 24px rgba(0,0,0,0.08);
+  --dash-blur: 12px;
+  --dash-radius: 12px;
+  --dash-ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dark .dashboard-premium {
+  --dash-bg: #202020;
+  --dash-surface: rgba(26, 26, 26, 0.6);
+  --dash-border: rgba(255, 255, 255, 0.07);
+  --dash-border-hover: rgba(255, 255, 255, 0.12);
+  --dash-text: #e8e4e0;
+  --dash-text-muted: #8a8580;
+  --dash-shadow: 0 1px 3px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.2);
+  --dash-shadow-hover: 0 2px 8px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.3);
+}
+
+.dashboard-premium {
+  background: var(--dash-bg);
+  color: var(--dash-text);
+  min-height: 100%;
+}
+
+/* ── Fade-up entrance animation ── */
+
+@keyframes dash-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dash-animate-in {
+  animation: dash-fade-up 0.5s var(--dash-ease) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dash-animate-in {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ── Recharts overrides inside dashboard ── */
+
+.dashboard-premium .recharts-cartesian-grid line {
+  stroke: rgba(0, 0, 0, 0.06);
+}
+
+.dark .dashboard-premium .recharts-cartesian-grid line {
+  stroke: rgba(255, 255, 255, 0.05);
+}
+
+.dashboard-premium .recharts-text {
+  fill: var(--dash-text-muted);
+  font-size: 11px;
+}
+
+.dashboard-premium .recharts-tooltip-cursor {
+  stroke: rgba(0, 0, 0, 0.08);
+}
+
+.dark .dashboard-premium .recharts-tooltip-cursor {
+  stroke: rgba(255, 255, 255, 0.08);
+}
+
+/* ── Tabular numerals for metrics ── */
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
