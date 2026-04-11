@@ -15,6 +15,7 @@ interface MultiSelectProps {
   onChange: (selected: string[]) => void;
   placeholder?: string;
   className?: string;
+  showSelectAll?: boolean;
 }
 
 export function MultiSelect({
@@ -23,6 +24,7 @@ export function MultiSelect({
   onChange,
   placeholder = 'Select items...',
   className,
+  showSelectAll = true,
 }: MultiSelectProps) {
   const [open, setOpen] = React.useState(false);
   const [searchTerm, setSearchTerm] = React.useState('');
@@ -81,16 +83,15 @@ export function MultiSelect({
                   variant="secondary"
                   key={item}
                   className="mr-1 mb-1 text-xs"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleUnselect(item);
-                  }}
                 >
                   {item}
-                  <button
-                    className="ml-1 ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    className="ml-1 inline-flex rounded-full ring-offset-background outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
+                        e.preventDefault();
                         handleUnselect(item);
                       }
                     }}
@@ -105,7 +106,7 @@ export function MultiSelect({
                     }}
                   >
                     <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
-                  </button>
+                  </span>
                 </Badge>
               ))
             ) : safeSelected.length > 3 ? (
@@ -116,7 +117,7 @@ export function MultiSelect({
           </div>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-full p-0" align="start">
+      <PopoverContent className="w-full border bg-popover/95 p-0 text-popover-foreground shadow-xl backdrop-blur-xl" align="start">
         <div className="p-2">
           <input
             type="text"
@@ -127,7 +128,7 @@ export function MultiSelect({
           />
         </div>
         <div className="max-h-64 overflow-auto border-t">
-          {filteredOptions.length > 0 && (
+          {showSelectAll && filteredOptions.length > 0 && (
             <div className="p-2 border-b">
               <Button
                 variant="ghost"
