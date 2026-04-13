@@ -989,7 +989,7 @@ export default function OnboardingPortalPage() {
                     The attorney can log in immediately with the credentials provided, and any profile details entered here will be pre-populated for them.
                   </p>
                   <p className="text-[12px] leading-5 text-amber-100/80">
-                    Team members entered here will be associated with the attorney account and can be updated later from Lawyer Profile Management.
+                    Team members entered here will be associated with the attorney account and can be updated later from Lawyer Management section.
                   </p>
                 </div>
               </div>

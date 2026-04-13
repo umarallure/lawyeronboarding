@@ -50,6 +50,7 @@ import AccountLawyerProfilesPage from "./pages/AccountLawyerProfilesPage";
 import AccountLawyerProfileDetailPage from "./pages/AccountLawyerProfileDetailPage";
 import SectionPlaceholderPage from "./pages/SectionPlaceholderPage";
 import OnboardingPortalPage from "./pages/OnboardingPortalPage";
+import LawyerManagementPage from "./pages/LawyerManagementPage";
 import AppShell from "@/components/layout/AppShell";
 import LogoLoader from "@/components/LogoLoader";
 import { Navigate } from "react-router-dom";
@@ -386,7 +387,7 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <AppShell title="Lawyer Management">
-                    <SectionPlaceholderPage sectionName="Lawyer Management" />
+                    <LawyerManagementPage />
                   </AppShell>
                 </ProtectedRoute>
               }
