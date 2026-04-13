@@ -2,7 +2,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowUpRight, MessageSquare } from "lucide-react";
 
-const slackWorkspaceUrl = import.meta.env.VITE_SLACK_WORKSPACE_URL?.trim() ?? "";
+const DEFAULT_SLACK_WORKSPACE_URL = "https://app.slack.com/client/T09VD5KFDE0";
+const slackWorkspaceUrl =
+  import.meta.env.VITE_SLACK_WORKSPACE_URL?.trim() || DEFAULT_SLACK_WORKSPACE_URL;
 
 const isValidSlackUrl = (value: string) => {
   if (!value) return false;
@@ -38,7 +40,7 @@ const SlackPage = () => {
 
         <CardContent className="space-y-4 text-center">
           <div className="rounded-xl border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-            {workspaceUrl || "Set VITE_SLACK_WORKSPACE_URL to enable this button."}
+            {workspaceUrl || "Slack workspace URL is unavailable."}
           </div>
 
           {workspaceUrl ? (
