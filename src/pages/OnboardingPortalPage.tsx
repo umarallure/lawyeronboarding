@@ -415,7 +415,9 @@ export default function OnboardingPortalPage() {
       // Keep the user on the page when there are follow-up notes to review.
       if (data?.userId && warnings.length === 0) {
         setTimeout(() => {
-          navigate(`/account-management/lawyer-profiles/${data.userId}`);
+          navigate('/lawyer-management', {
+            state: { selectedUserId: data.userId },
+          });
         }, 1500);
       }
     } catch (err) {

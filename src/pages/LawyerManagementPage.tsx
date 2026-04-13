@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MouseEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowUpRight,
   BriefcaseBusiness,
@@ -162,9 +162,15 @@ const getAccountStatusBadgeClass = (value: string | null | undefined) => {
 const isAccountActive = (value: string | null | undefined) => normalizeAccountStatus(value) === "active";
 
 const LawyerManagementPage = () => {
+  const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
   const attorneyPortalUrl = import.meta.env.VITE_ATTORNEY_PORTAL_URL?.trim() || undefined;
+  const locationState = location.state as { selectedUserId?: string } | null;
+  const initialSelectedUserId =
+    typeof locationState?.selectedUserId === "string" && locationState.selectedUserId.trim()
+      ? locationState.selectedUserId.trim()
+      : null;
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -278,6 +284,9 @@ const LawyerManagementPage = () => {
       setLawyers(merged);
       setSelectedUserId((current) => {
         if (current && merged.some((lawyer) => lawyer.user_id === current)) return current;
+        if (initialSelectedUserId && merged.some((lawyer) => lawyer.user_id === initialSelectedUserId)) {
+          return initialSelectedUserId;
+        }
         return merged[0]?.user_id ?? null;
       });
     } catch (loadError) {
@@ -285,7 +294,7 @@ const LawyerManagementPage = () => {
       setSelectedUserId(null);
       setError(loadError instanceof Error ? loadError.message : "Unable to load lawyer accounts.");
     }
-  }, []);
+  }, [initialSelectedUserId]);
 
   useEffect(() => {
     let mounted = true;
