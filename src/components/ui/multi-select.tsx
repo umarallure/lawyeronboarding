@@ -9,14 +9,24 @@ import {
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 
+type MultiSelectOption = string | { value: string; label: string };
+
 interface MultiSelectProps {
-  options: string[];
+  options: MultiSelectOption[];
   selected: string[];
   onChange: (selected: string[]) => void;
   placeholder?: string;
   className?: string;
   showSelectAll?: boolean;
 }
+
+interface NormalizedOption {
+  value: string;
+  label: string;
+}
+
+const normalizeOption = (option: MultiSelectOption): NormalizedOption =>
+  typeof option === 'string' ? { value: option, label: option } : option;
 
 export function MultiSelect({
   options,
@@ -30,14 +40,26 @@ export function MultiSelect({
   const [searchTerm, setSearchTerm] = React.useState('');
 
   // Safety check for options and selected - ensure they're always arrays
-  const safeOptions = React.useMemo(() => Array.isArray(options) ? options : [], [options]);
+  const safeOptions = React.useMemo<NormalizedOption[]>(
+    () => (Array.isArray(options) ? options.map(normalizeOption) : []),
+    [options]
+  );
   const safeSelected = React.useMemo(() => Array.isArray(selected) ? selected : [], [selected]);
 
+  const labelByValue = React.useMemo(() => {
+    const map = new Map<string, string>();
+    safeOptions.forEach((option) => map.set(option.value, option.label));
+    return map;
+  }, [safeOptions]);
+
   // Filter options based on search term
-  const filteredOptions = React.useMemo(() => {
+  const filteredOptions = React.useMemo<NormalizedOption[]>(() => {
     if (!searchTerm.trim()) return safeOptions;
-    return safeOptions.filter(option =>
-      option.toLowerCase().includes(searchTerm.toLowerCase())
+    const needle = searchTerm.toLowerCase();
+    return safeOptions.filter(
+      (option) =>
+        option.label.toLowerCase().includes(needle) ||
+        option.value.toLowerCase().includes(needle)
     );
   }, [safeOptions, searchTerm]);
 
@@ -54,12 +76,13 @@ export function MultiSelect({
   }, [safeSelected, onChange]);
 
   const handleToggleAll = React.useCallback(() => {
-    if (safeSelected.length === filteredOptions.length) {
+    const filteredValues = filteredOptions.map((option) => option.value);
+    if (filteredValues.every((value) => safeSelected.includes(value))) {
       // Deselect all filtered options
-      onChange(safeSelected.filter(s => !filteredOptions.includes(s)));
+      onChange(safeSelected.filter((s) => !filteredValues.includes(s)));
     } else {
       // Select all filtered options
-      const newSelected = [...new Set([...safeSelected, ...filteredOptions])];
+      const newSelected = [...new Set([...safeSelected, ...filteredValues])];
       onChange(newSelected);
     }
   }, [safeSelected, filteredOptions, onChange]);
@@ -84,7 +107,7 @@ export function MultiSelect({
                   key={item}
                   className="mr-1 mb-1 text-xs"
                 >
-                  {item}
+                  {labelByValue.get(item) ?? item}
                   <span
                     role="button"
                     tabIndex={0}
@@ -136,7 +159,9 @@ export function MultiSelect({
                 onClick={handleToggleAll}
                 className="w-full justify-start text-xs"
               >
-                {safeSelected.length === filteredOptions.length ? 'Deselect All' : 'Select All'}
+                {filteredOptions.every((option) => safeSelected.includes(option.value))
+                  ? 'Deselect All'
+                  : 'Select All'}
               </Button>
             </div>
           )}
@@ -144,18 +169,18 @@ export function MultiSelect({
             <div className="p-1">
               {filteredOptions.map((option) => (
                 <button
-                  key={option}
+                  key={option.value}
                   type="button"
-                  onClick={() => handleSelect(option)}
+                  onClick={() => handleSelect(option.value)}
                   className={cn(
                     'w-full text-left px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground cursor-pointer flex items-center',
-                    safeSelected.includes(option) && 'bg-accent text-accent-foreground'
+                    safeSelected.includes(option.value) && 'bg-accent text-accent-foreground'
                   )}
                 >
                   <div
                     className={cn(
                       'mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary',
-                      safeSelected.includes(option)
+                      safeSelected.includes(option.value)
                         ? 'bg-primary text-primary-foreground'
                         : 'opacity-50 [&_svg]:invisible'
                     )}
@@ -170,7 +195,7 @@ export function MultiSelect({
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
                   </div>
-                  <span>{option}</span>
+                  <span>{option.label}</span>
                 </button>
               ))}
             </div>

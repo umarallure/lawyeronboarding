@@ -6,6 +6,7 @@ import {
   Building2,
   ChevronDown,
   ChevronRight,
+  ClipboardList,
   Grid3X3,
   LayoutDashboard,
   MessageSquare,
@@ -255,6 +256,11 @@ const AppShell = ({
         label: 'Lawyer Management',
         to: '/lawyer-management',
         icon: <BriefcaseBusiness className="h-4 w-4 text-current" />,
+      },
+      {
+        label: 'Task Management',
+        to: '/task-management',
+        icon: <ClipboardList className="h-4 w-4 text-current" />,
       },
       {
         label: 'Daily Outreach Report',

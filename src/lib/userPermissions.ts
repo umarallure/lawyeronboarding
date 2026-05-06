@@ -81,3 +81,56 @@ export const isBufferAgent = async (userId: string | undefined): Promise<boolean
     return false;
   }
 };
+
+export type OnboardingTaskRoleFlags = {
+  isAdmin: boolean;
+  canAccess: boolean;
+};
+
+/**
+ * Resolve task-management permissions for the lawyer-onboarding portal.
+ * Admins / super-admins can assign tasks to anyone; everyone else can only
+ * self-assign and see tasks they own or created. Restricted users have no access.
+ */
+export const getOnboardingTaskRoleFlags = async (
+  userId: string | undefined
+): Promise<OnboardingTaskRoleFlags> => {
+  if (!userId || isRestrictedUser(userId)) {
+    return { isAdmin: false, canAccess: false };
+  }
+
+  try {
+    const { supabase } = await import('@/integrations/supabase/client');
+    const client = supabase as unknown as {
+      from: (table: string) => {
+        select: (cols: string) => {
+          eq: (col: string, v: string) => {
+            maybeSingle: () => Promise<{
+              data: { role?: string | null; is_super_admin?: boolean | null } | null;
+              error: { message?: string } | null;
+            }>;
+          };
+        };
+      };
+    };
+
+    const { data, error } = await client
+      .from('app_users')
+      .select('role,is_super_admin')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (error) {
+      return { isAdmin: false, canAccess: true };
+    }
+
+    const role = data?.role ?? null;
+    const isAdmin =
+      Boolean(data?.is_super_admin) || role === 'admin' || role === 'super_admin';
+
+    return { isAdmin, canAccess: true };
+  } catch (error) {
+    console.error('Error checking onboarding task role flags:', error);
+    return { isAdmin: false, canAccess: true };
+  }
+};

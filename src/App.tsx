@@ -51,6 +51,7 @@ import AccountLawyerProfileDetailPage from "./pages/AccountLawyerProfileDetailPa
 import SectionPlaceholderPage from "./pages/SectionPlaceholderPage";
 import OnboardingPortalPage from "./pages/OnboardingPortalPage";
 import LawyerManagementPage from "./pages/LawyerManagementPage";
+import TaskManagementPage from "./pages/TaskManagement";
 import AppShell from "@/components/layout/AppShell";
 import LogoLoader from "@/components/LogoLoader";
 import { Navigate } from "react-router-dom";
@@ -388,6 +389,16 @@ const App = () => (
                 <ProtectedRoute>
                   <AppShell title="Lawyer Management">
                     <LawyerManagementPage />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/task-management"
+              element={
+                <ProtectedRoute>
+                  <AppShell title="Task Management">
+                    <TaskManagementPage />
                   </AppShell>
                 </ProtectedRoute>
               }

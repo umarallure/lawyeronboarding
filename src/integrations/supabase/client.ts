@@ -44,6 +44,8 @@ const LOGIN_ALLOWED_TABLES = new Set([
   'attorney_profile_score_items',
   'team_members',
   'centers',
+  'closer_tasks',
+  'closer_task_notes',
 ]);
 
 const createMockQueryBuilder = () => {
