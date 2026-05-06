@@ -91,27 +91,27 @@ const Auth = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 lg:gap-8 items-center">
           
           {/* --- Left Column: Brand & Value --- */}
-          <div className="hidden lg:flex flex-col justify-center h-full space-y-8 pr-10">
+          <div className="relative z-10 hidden lg:flex flex-col justify-center h-full space-y-8 pr-10">
             <div className="space-y-4">
-              <h1 className="text-5xl font-bold tracking-tight text-foreground leading-[1.1]">
+              <h1 className="text-5xl font-bold tracking-tight leading-[1.1]" style={{ color: '#000000' }}>
                 Lawyer Acquisition Portal <br />
               </h1>
-              <p className="text-lg text-muted-foreground max-w-md leading-relaxed">
+              <p className="text-lg text-slate-600 max-w-md leading-relaxed">
                 Your command center for lawyer acquisition operations. Access real-time analytics, manage workflows, and track progress in one secure workspace.
               </p>
             </div>
 
             {/* Feature Cards Grid - Using bg-card/40 and border-border */}
             <div className="grid grid-cols-2 gap-4 mt-4">
-              <div className="p-4 rounded-xl bg-card/40 border border-border backdrop-blur-sm hover:bg-card/60 transition-colors duration-300">
+              <div className="rounded-xl border border-[#CF7A4D] bg-[linear-gradient(135deg,#F3B08E_0%,#EC9B71_100%)] p-4 shadow-[0_12px_28px_rgba(174,64,16,0.18)] transition-colors duration-300 hover:bg-[linear-gradient(135deg,#EEA37D_0%,#E58E63_100%)]">
                 <Zap className="w-6 h-6 text-yellow-400 mb-3" />
-                <h3 className="text-foreground font-medium text-sm">Lightning Fast</h3>
-                <p className="text-muted-foreground text-xs mt-1">Optimized for high-volume workflows without lag.</p>
+                <h3 className="text-[#7B2D0C] font-medium text-sm">Lightning Fast</h3>
+                <p className="text-[#8F573A] text-xs mt-1">Optimized for high-volume workflows without lag.</p>
               </div>
-              <div className="p-4 rounded-xl bg-card/40 border border-border backdrop-blur-sm hover:bg-card/60 transition-colors duration-300">
+              <div className="rounded-xl border border-[#CF7A4D] bg-[linear-gradient(135deg,#F3B08E_0%,#EC9B71_100%)] p-4 shadow-[0_12px_28px_rgba(174,64,16,0.18)] transition-colors duration-300 hover:bg-[linear-gradient(135deg,#EEA37D_0%,#E58E63_100%)]">
                 <BarChart3 className="w-6 h-6 text-sky-400 mb-3" />
-                <h3 className="text-foreground font-medium text-sm">Real-time Data</h3>
-                <p className="text-muted-foreground text-xs mt-1">Live dashboards and instant call result tracking.</p>
+                <h3 className="text-[#7B2D0C] font-medium text-sm">Real-time Data</h3>
+                <p className="text-[#8F573A] text-xs mt-1">Live dashboards and instant call result tracking.</p>
               </div>
             </div>
           </div>
@@ -120,7 +120,7 @@ const Auth = () => {
           <div className="flex justify-center lg:justify-end">
             <Card className="w-full max-w-md border-border bg-card/60 backdrop-blur-xl shadow-2xl relative overflow-hidden group">
               {/* Top Highlight Line - Uses primary */}
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-purple-500 to-sky-500" />
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#AE4010] via-[#C9551E] to-[#E27A43]" />
               
               <CardHeader className="space-y-1 pb-6 pt-8">
                 <CardTitle className="text-2xl font-bold text-center text-foreground">Welcome back</CardTitle>
